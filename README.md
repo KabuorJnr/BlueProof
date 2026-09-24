@@ -26,15 +26,17 @@ The design and its evaluation protocol are in `paper/BlueProof-paper.pdf`.
 | Hash-chained ledger with `/ledger/verify` and CSV export | Built, tested |
 | M-Pesa **B2C** payout with result/timeout callbacks, replay-safe, admin retry | Built. Tested against Daraja-shaped responses, **never against the sandbox** |
 | Live Sentinel-2 via Copernicus Statistical API, SCL cloud masking, measured baseline, sustained-drop alerts | Built. Tested against API-shaped responses, **never against a real account** |
-| Llama bounded verifier (prompt `v2-bounded`), confidence from agreement across 3 samples | Built, tested against a fake model. **No model has read a real mangrove photo.** |
+| Llama bounded verifier (prompt `v3-bounded`), confidence from agreement across 3 samples | Built. **First real run (Llama 3.2 11B, 60 Wikimedia photos): caught 0 of 20 wrong species declarations.** See `docs/evaluations/` |
 | Plot marker reading (is this photo of *this* plot?) and comparison with the last verified visit (same place? what changed?) | Built, tested against a fake model |
 | `tools/llama_eval.py`: the deployed prompts, sampling and parsers, measured on labelled photos | Built. Never run on real photos |
 
-**The central claim is still untested.** Every verdict this repository has
-produced came from a deterministic stub or from a fake model in the tests.
-Whether a vision model can corroborate species and detect cutting on real
-field photos is the question `tools/llama_eval.py` answers, and it needs
-roughly 100 labelled photos from Tudor Creek. Every verdict carries its
+**The first real model run failed the central test.** On 60 openly licensed
+photos, Llama 3.2 11B Vision agreed with every species it was told, including
+all 20 deliberately wrong ones, and rated every photo healthy and legible
+(`docs/evaluations/2026-09-24-wikimedia-llama-3.2-11b/`). Until a model catches
+mistaken declarations well above chance, a model's species "yes" must not gate
+payment. Field performance on Tudor Creek plot photos, the real test, is still
+unmeasured. Every verdict carries its
 `verification_source` into the ledger, and the apps show a non-dismissible
 banner whenever anything is simulated.
 

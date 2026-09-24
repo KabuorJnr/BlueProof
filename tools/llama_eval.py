@@ -163,8 +163,8 @@ def pct(a, b):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--photos", required=True, type=Path)
-    ap.add_argument("--labels", required=True, type=Path)
+    ap.add_argument("--photos", type=Path)
+    ap.add_argument("--labels", type=Path)
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--api-url", default=API_URL, help="any OpenAI-compatible chat completions URL")
     ap.add_argument("--out", default="llama_eval_results.csv", type=Path)
@@ -175,13 +175,20 @@ def main() -> int:
                     help="fraction of rows given a deliberately wrong declared species")
     ap.add_argument("--samples", type=int, default=settings.verifier_samples,
                     help="verifier calls per photograph, aggregated as deployed (default: the deployed value)")
+    ap.add_argument("--from-csv", type=Path, default=None,
+                    help="recompute the report from a saved results CSV; makes no model calls")
     args = ap.parse_args()
+
+    if args.from_csv:
+        return report(load_rows(args.from_csv), args)
 
     key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("LLAMA_API_KEY") or settings.llama_api_key
     if not key:
         print("Set LLAMA_API_KEY in backend/.env (or OPENROUTER_API_KEY in your environment).", file=sys.stderr)
         return 2
 
+    if not (args.photos and args.labels):
+        ap.error("--photos and --labels are required unless --from-csv is given")
     with args.labels.open(newline="", encoding="utf-8") as f:
         truth = list(csv.DictReader(f))
     if not truth:
@@ -264,6 +271,27 @@ def main() -> int:
         w.writeheader()
         w.writerows(rows)
 
+    return report(rows, args)
+
+
+
+def load_rows(path: Path) -> list[dict]:
+    """Read a results CSV back with the types report() expects."""
+    def num(v):
+        return int(v) if str(v).strip() in {"0", "1"} else ""
+    rows = []
+    for r in csv.DictReader(path.open(newline="", encoding="utf-8")):
+        for k in ("failed", "unparseable", "declared_correct", "fabricated"):
+            r[k] = int(r[k] or 0)
+        for k in ("legible", "pred_cutting", "pred_pests", "marker_correct"):
+            r[k] = num(r[k])
+        for k in ("true_cutting", "true_pests"):
+            r[k] = flag(r[k])
+        rows.append(r)
+    return rows
+
+
+def report(rows: list[dict], args) -> int:
     usable = [r for r in rows if not r["failed"] and not r["unparseable"]]
     n = len(usable)
     print("\n" + "=" * 66)
@@ -358,11 +386,15 @@ def main() -> int:
         print(f"  different place, CAUGHT           {pct(sum(r['same_location_pred'] == 'no' for r in diff), len(diff))}   ({len(diff)} pairs)")
         print(f"  same place, wrongly flagged       {pct(sum(r['same_location_pred'] == 'no' for r in same), len(same))}")
 
-    print(f"\n  per photograph results written to {args.out}")
+    if getattr(args, "from_csv", None):
+        print(f"\n  report recomputed from {args.from_csv}; no model calls made")
+    else:
+        print(f"\n  per photograph results written to {args.out}")
     print("\n  Report these numbers whatever they say. A negative result,")
     print("  honestly reported, is publishable and useful. An unmeasured")
     print("  claim is neither.")
     return 0
+
 
 
 if __name__ == "__main__":
