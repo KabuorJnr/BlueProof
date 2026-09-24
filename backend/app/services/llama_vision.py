@@ -38,7 +38,7 @@ from . import http
 
 # Bumped whenever the wording below changes. Recorded with every verdict, so a
 # figure measured against one prompt is never silently credited to another.
-PROMPT_VERSION = "v2-bounded"
+PROMPT_VERSION = "v3-bounded"
 
 KENYAN_MANGROVE_SPECIES = [
     "Rhizophora mucronata",
@@ -75,9 +75,26 @@ SYSTEM_PROMPT = (
     "5. seedlings: how many seedlings are clearly visible (integer).\n"
     "6. confidence: 0 to 1, how confident you are in answers 1 to 4 together.\n"
     "7. reasoning: one or two sentences on what you saw.\n\n"
-    "Reply with ONLY a JSON object with keys legible, health, cutting, pests, "
-    "species_consistent, species_if_different, seedlings, confidence, reasoning."
+    "Reply with ONLY a JSON object and no other text, in exactly this shape:\n"
+    '{"legible": true, "health": "healthy", "cutting": false, "pests": false, '
+    '"species_consistent": "yes", "species_if_different": null, "seedlings": 0, '
+    '"confidence": 0.0, "reasoning": "..."}'
 )
+
+# Instructions go in the USER turn, next to the image, not in a system message.
+# Llama 3.2 Vision (tested on NVIDIA's API, 2026-09-24) answered sensibly but
+# ignored a system message's output format entirely when an image was present.
+# Models that do honour system messages lose nothing from this placement.
+
+
+def _vision_turn(instructions: str, request: str, image_url: str) -> list[dict]:
+    return [{
+        "role": "user",
+        "content": [
+            {"type": "image_url", "image_url": {"url": image_url}},
+            {"type": "text", "text": f"{instructions}\n\n{request}"},
+        ],
+    }]
 
 
 class VerifierError(Exception):
@@ -87,16 +104,11 @@ class VerifierError(Exception):
 def build_messages(image_bytes: bytes, declared_species: str | None, mime: str = "image/jpeg") -> list[dict]:
     b64 = base64.b64encode(image_bytes).decode()
     declared = declared_species or "not stated"
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": f"Declared species: {declared}. Assess this monitoring plot photograph."},
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-            ],
-        },
-    ]
+    return _vision_turn(
+        SYSTEM_PROMPT,
+        f"Declared species: {declared}. Assess this monitoring plot photograph. JSON only.",
+        f"data:{mime};base64,{b64}",
+    )
 
 
 def _extract_json(text: str) -> dict:
@@ -343,7 +355,8 @@ MARKER_PROMPT = (
     "This photograph shows a plot marker (a post, board or tag) in a mangrove "
     "restoration site. Read the plot code written on it exactly as written, for "
     "example TC-A-014. Do not guess characters you cannot see. Reply with ONLY a "
-    'JSON object: {"legible": true or false, "code": "the code, or null"}.'
+    'JSON object and no other text: {"legible": true, "code": "TC-A-014"} '
+    '(use false and null if the code cannot be read).'
 )
 
 
@@ -356,13 +369,8 @@ def parse_marker(content: str) -> dict:
 
 def marker_messages(image_bytes: bytes, mime: str = "image/jpeg") -> list[dict]:
     b64 = base64.b64encode(image_bytes).decode()
-    return [
-        {"role": "system", "content": MARKER_PROMPT},
-        {"role": "user", "content": [
-            {"type": "text", "text": "Read the plot code on this marker."},
-            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-        ]},
-    ]
+    return _vision_turn(MARKER_PROMPT, "Read the plot code on this marker. JSON only.",
+                        f"data:{mime};base64,{b64}")
 
 
 async def read_marker(image_bytes: bytes, expected_code: str, mime: str = "image/jpeg") -> dict:
@@ -393,7 +401,8 @@ COMPARE_PROMPT = (
     "2. change: the plants since the previous visit: improved, unchanged, "
     "declined, or unclear.\n"
     "3. note: one sentence on the most important difference.\n"
-    "Reply with ONLY a JSON object with keys same_location, change, note."
+    "Reply with ONLY a JSON object and no other text, in exactly this shape:\n"
+    '{"same_location": "yes", "change": "unchanged", "note": "..."}'
 )
 
 
@@ -410,13 +419,8 @@ def parse_comparison(content: str) -> dict:
 
 def compare_messages(stitched_jpeg: bytes) -> list[dict]:
     b64 = base64.b64encode(stitched_jpeg).decode()
-    return [
-        {"role": "system", "content": COMPARE_PROMPT},
-        {"role": "user", "content": [
-            {"type": "text", "text": "Compare the previous visit (left) with today (right)."},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-        ]},
-    ]
+    return _vision_turn(COMPARE_PROMPT, "Compare the previous visit (left) with today (right). JSON only.",
+                        f"data:image/jpeg;base64,{b64}")
 
 
 async def compare_visits(stitched_jpeg: bytes) -> dict:

@@ -122,7 +122,7 @@ def test_different_place_from_last_visit_escalates(client, amina, live, monkeypa
     assert any("same place" in r for r in second["review_reasons"])
 
     # One stitched image, wider than either photo: works on single-image models.
-    content = seen["compare"][0]["messages"][1]["content"]
+    content = seen["compare"][0]["messages"][-1]["content"]
     images = [c for c in content if c["type"] == "image_url"]
     assert len(images) == 1
     stitched = Image.open(io.BytesIO(base64.b64decode(images[0]["image_url"]["url"].split(",")[1])))

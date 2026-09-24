@@ -22,7 +22,7 @@ def test_verified_submission_pays_and_writes_ledger(client, amina, live_model):
     assert body["payment"]["status"] == "success"
     assert "phone" not in body["payment"]
     # The declared species went to the model; the model was not asked to name it.
-    user_text = seen[0]["messages"][1]["content"][0]["text"]
+    user_text = next(c["text"] for c in seen[0]["messages"][-1]["content"] if c["type"] == "text")
     assert "Declared species: Rhizophora mucronata" in user_text
 
     ledger = client.get("/ledger").json()
@@ -30,7 +30,7 @@ def test_verified_submission_pays_and_writes_ledger(client, amina, live_model):
     assert ledger[0]["monitor_ref"] == "BP-M-0001"
     assert ledger[0]["species"] == PLOT["species"]
     assert ledger[0]["photo_sha256"] == body["event"]["photo_sha256"]
-    assert ledger[0]["verification_source"].endswith("@v2-boundedx3")
+    assert ledger[0]["verification_source"].endswith("@v3-boundedx3")
     assert "Amina" not in str(ledger)
     assert client.get("/ledger/verify").json()["ok"] is True
 

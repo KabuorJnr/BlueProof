@@ -148,6 +148,15 @@ def ask(client, url, path: Path, declared: str, model: str, key: str, samples: i
     return raws, aggregate(verdicts, f"{model}@{PROMPT_VERSION}x{samples}")
 
 
+def flag(value):
+    """A 0/1 label, or None where the labels file leaves it blank (not assessed)."""
+    value = str(value if value is not None else "").strip()
+    return int(value) if value in {"0", "1"} else None
+
+
+HEALTH_LABELS = {"healthy", "stressed", "dead"}
+
+
 def pct(a, b):
     return f"{(100.0 * a / b):.1f}%" if b else "n/a"
 
@@ -230,9 +239,9 @@ def main() -> int:
                 "legible": int(v.legible) if v else "",
                 "true_health": norm(t["health"]),
                 "pred_health": v.health if v else "",
-                "true_cutting": int(t["cutting"]),
+                "true_cutting": flag(t.get("cutting")),
                 "pred_cutting": int(v.evidence_of_cutting) if v else "",
-                "true_pests": int(t["pests"]),
+                "true_pests": flag(t.get("pests")),
                 "pred_pests": int(v.pest_damage) if v else "",
                 "confidence": v.confidence if v else "",
                 "self_confidence": v.self_reported_confidence if v else "",
@@ -280,12 +289,23 @@ def main() -> int:
     print("    (the verification layer adds value only if CAUGHT is well above chance)")
 
     print(f"\n  fabricated species offered     {pct(sum(r['fabricated'] for r in usable), n)}")
-    print(f"  health agreement               {pct(sum(r['pred_health'] == r['true_health'] for r in usable), n)}")
+    # Only rows whose labels say something are scored on that label. A corpus
+    # labelled for species alone reports species alone.
+    with_health = [r for r in usable if r["true_health"] in HEALTH_LABELS]
+    if with_health:
+        print(f"  health agreement               {pct(sum(r['pred_health'] == r['true_health'] for r in with_health), len(with_health))}")
+    else:
+        print("  health agreement               not labelled")
+    print(f"  judged not legible             {pct(sum(not r['legible'] for r in usable), n)}")
 
     for name in ("cutting", "pests"):
-        tp = sum(1 for r in usable if r[f"pred_{name}"] and r[f"true_{name}"])
-        fp = sum(1 for r in usable if r[f"pred_{name}"] and not r[f"true_{name}"])
-        fn = sum(1 for r in usable if not r[f"pred_{name}"] and r[f"true_{name}"])
+        rs = [r for r in usable if r[f"true_{name}"] is not None]
+        if not rs:
+            print(f"  RQ2 {name:<8} not labelled   (flagged on {pct(sum(bool(r[f'pred_{name}']) for r in usable), n)} of photos)")
+            continue
+        tp = sum(1 for r in rs if r[f"pred_{name}"] and r[f"true_{name}"])
+        fp = sum(1 for r in rs if r[f"pred_{name}"] and not r[f"true_{name}"])
+        fn = sum(1 for r in rs if not r[f"pred_{name}"] and r[f"true_{name}"])
         print(f"  RQ2 {name:<8} recall {pct(tp, tp + fn):>7}   precision {pct(tp, tp + fp):>7}")
 
     # The deployed gate, minus the non-model checks (GPS, duplicates, cadence).
@@ -294,7 +314,8 @@ def main() -> int:
                 and float(r["confidence"]) >= args.threshold)
 
     def error(r):
-        return (not r["declared_correct"]) or r["pred_health"] != r["true_health"]
+        wrong_health = r["true_health"] in HEALTH_LABELS and r["pred_health"] != r["true_health"]
+        return (not r["declared_correct"]) or wrong_health
 
     acc = [r for r in usable if accepted(r)]
     abst = [r for r in usable if not accepted(r)]

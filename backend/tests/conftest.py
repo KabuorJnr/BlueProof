@@ -136,8 +136,8 @@ def model_router(verify=None, marker=None, compare=None, verify_sequence=None, s
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
-        system = body["messages"][0]["content"]
-        kind = "marker" if "plot marker" in system else "compare" if "side by side" in system else "verify"
+        text = " ".join(c.get("text", "") for c in body["messages"][-1]["content"] if isinstance(c, dict))
+        kind = "marker" if "plot marker" in text else "compare" if "side by side" in text else "verify"
         seen[kind].append(body)
         if status != 200:
             return httpx.Response(status, json={"error": "boom"})
