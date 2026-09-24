@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BlueProof Console</title>
+<style>
+  :root{--bg:#07292E;--panel:#0E3A41;--line:#1E565E;--sand:#F2F6F5;--soft:#A9C9CB;--amber:#E0A34A;--teal:#35B0A7;--red:#E07A5F}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--sand);line-height:1.5}
+  header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+  h1{font-size:22px;margin:0;letter-spacing:2px}
+  .tag{font-size:13px;color:var(--soft);background:var(--panel);border:1px solid var(--line);padding:6px 12px;border-radius:999px}
+  .banner{background:#3a2a10;color:#f3d7a4;border-bottom:1px solid var(--amber);padding:10px 24px;font-size:14px}
+  main{max-width:1200px;margin:0 auto;padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;min-width:0}
+  .full{grid-column:1 / -1}
+  h2{font-size:17px;margin:0 0 12px}
+  label{display:block;font-size:13px;color:var(--soft);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:#062227;color:var(--sand);font-size:15px;font-family:inherit}
+  button{margin-top:10px;background:var(--amber);color:#26200f;border:0;padding:9px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;color:var(--sand);border:1px solid var(--line)}
+  button.bad{background:var(--red);color:#2a0f08}
+  button:disabled{opacity:.5;cursor:default}
+  .stat{display:flex;gap:12px;flex-wrap:wrap}
+  .stat div{flex:1;min-width:120px;background:#062227;border:1px solid var(--line);border-radius:12px;padding:14px}
+  .stat b{display:block;font-size:26px;color:var(--teal)}
+  .stat span{font-size:12px;color:var(--soft)}
+  pre{background:#062227;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:13px;overflow:auto;white-space:pre-wrap;max-height:360px}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--soft);font-weight:500}
+  .pill{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+  .ok{color:var(--teal);border-color:var(--teal)} .warn{color:var(--amber);border-color:var(--amber)} .badc{color:var(--red);border-color:var(--red)}
+  .note{font-size:12px;color:var(--soft);margin-top:8px}
+  .review{display:grid;grid-template-columns:260px 1fr;gap:16px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .review img{width:100%;border-radius:10px;border:1px solid var(--line);background:#062227;aspect-ratio:4/3;object-fit:cover}
+  .review ul{margin:6px 0;padding-left:18px;color:var(--amber);font-size:13px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .row>*{flex:1;min-width:120px}
+  #login{max-width:380px;margin:60px auto}
+  @media (max-width:760px){main{grid-template-columns:1fr;padding:16px}.review{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>BLUEPROOF CONSOLE</h1>
+  <span class="tag" id="status">connecting…</span>
+</header>
+<div class="banner" id="demo" hidden></div>
+
+<section class="card" id="login" hidden>
+  <h2>Staff sign in</h2>
+  <p class="note">CFA leads, verifiers and admins. Monitors use the field app.</p>
+  <label for="api">API URL</label><input id="api">
+  <label for="phone">Phone</label><input id="phone" placeholder="2547XXXXXXXX" autocomplete="username">
+  <label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password">
+  <button onclick="signIn()">Sign in</button>
+  <p class="note" id="loginmsg"></p>
+  <p class="note" id="demohint" hidden>Demo accounts: CFA lead 254712000003 / 3333, admin 254712000009 / 9999.</p>
+</section>
+
+<main id="app" hidden>
+  <section class="card full">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">Impact <span class="note" id="who"></span></h2>
+      <button class="ghost" style="flex:0" onclick="signOut()">Sign out</button>
+    </div>
+    <div class="stat" id="impact" style="margin-top:12px"></div>
+    <p class="note" id="co2note"></p>
+  </section>
+
+  <section class="card full">
+    <h2>Review queue <span class="pill warn" id="qcount">0</span></h2>
+    <p class="note">Submissions the gate would not pay automatically. Nothing is paid until a person decides, and nobody reviews their own work.</p>
+    <div id="queue"></div>
+  </section>
+
+  <section class="card">
+    <h2>Accounts awaiting activation</h2>
+    <p class="note">Self-enrolled monitors cannot be paid until a CFA lead confirms they are a real member of the group.</p>
+    <div id="pending"></div>
+  </section>
+
+  <section class="card">
+    <h2>Ledger integrity</h2>
+    <button onclick="verifyLedger()">Recompute hash chain</button>
+    <a class="note" id="csv" style="display:block;margin-top:8px" target="_blank">Download ledger CSV</a>
+    <pre id="ledger">Not checked yet.</pre>
+  </section>
+
+  <section class="card">
+    <h2>Satellite canopy check</h2>
+    <p class="note">Sentinel-2 sees canopy scale loss across a hectare. It cannot resolve a single seedling.</p>
+    <button onclick="refreshSat()">Refresh NDVI series</button>
+    <pre id="sat">Not run yet.</pre>
+  </section>
+
+  <section class="card">
+    <h2>Submit on behalf of a monitor</h2>
+    <label for="plot">Plot</label><select id="plot"></select>
+    <label for="monitor">Monitor</label><select id="monitor"></select>
+    <label for="photo">Plot photograph</label><input id="photo" type="file" accept="image/*">
+    <label class="note"><input type="checkbox" id="atplot" checked style="width:auto"> Use the plot's own coordinates as the GPS fix (demo only)</label>
+    <button onclick="submitPlot()">Verify and pay</button>
+    <pre id="result">No submission yet.</pre>
+  </section>
+
+  <section class="card full">
+    <h2>MRV report, drafted from verified records</h2>
+    <button onclick="genReport()">Generate monitoring report</button>
+    <pre id="report">Not generated yet.</pre>
+  </section>
+
+  <section class="card full">
+    <h2>Payments</h2>
+    <div class="scroll"><table><thead><tr><th>ID</th><th>Event</th><th>KSh</th><th>Status</th><th>Receipt</th><th>Reason</th><th></th></tr></thead><tbody id="pays"></tbody></table></div>
+  </section>
+
+  <section class="card full">
+    <h2>All submissions</h2>
+    <div class="scroll"><table><thead><tr><th>ID</th><th>Plot</th><th>Declared</th><th>Corroborated</th><th>Health</th><th>Conf.</th><th>Dist.</th><th>Flags</th><th>Verifier</th><th>Status</th></tr></thead>
+    <tbody id="rows"></tbody></table></div>
+  </section>
+</main>
+
+<script>
+const DEFAULT_API = (location.port === "8080") ? "http://" + location.hostname + ":8000" : "http://localhost:8000";
+const store = {
+  get(k, d){ try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v){ try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+};
+let API = store.get("bp.console.api", DEFAULT_API);
+let TOKEN = store.get("bp.console.token", null);
+let ME = null, SITE = null, PLOTS = [];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function j(url, opts = {}){
+  const headers = {...(opts.headers || {})};
+  if (TOKEN) headers.Authorization = "Bearer " + TOKEN;
+  const r = await fetch(API + url, {...opts, headers});
+  if (r.status === 401 && TOKEN){ signOut(); throw new Error("Session expired"); }
+  if (!r.ok){ let d; try { d = (await r.json()).detail; } catch { d = await r.text(); } throw new Error(typeof d === "string" ? d : JSON.stringify(d)); }
+  return r.json();
+}
+const post = (url, body) => j(url, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+
+async function boot(){
+  $("api").value = API;
+  try {
+    const meta = await j("/");
+    $("status").textContent = `Verifier: ${meta.llama_model} · Satellite: ${meta.satellite} · M-Pesa: ${meta.mpesa} · KSh ${meta.payout_per_verified_event}/event`;
+    const stub = [meta.llama === "mock" && "verification", meta.satellite === "mock" && "satellite", meta.mpesa === "mock" && "payment"].filter(Boolean);
+    if (stub.length){ $("demo").hidden = false; $("demo").textContent = `Demo mode: ${stub.join(", ")} simulated. Nothing on this console is evidence of anything.`; }
+    $("demohint").hidden = !meta.demo_accounts;
+  } catch { $("status").textContent = "API offline at " + API; }
+  if (!TOKEN){ $("login").hidden = false; $("app").hidden = true; return; }
+  try { ME = await j("/auth/me"); } catch { return; }
+  if (!["cfa_lead","verifier","admin"].includes(ME.role)){ $("loginmsg").textContent = "This console is for staff. Use the field app."; signOut(); return; }
+  $("login").hidden = true; $("app").hidden = false;
+  $("who").textContent = `· ${ME.name} (${ME.public_ref}, ${ME.role})`;
+  $("csv").href = API + "/ledger.csv";
+  const sites = await j("/sites");
+  SITE = sites[0];
+  PLOTS = SITE ? await j(`/sites/${SITE.id}/plots`) : [];
+  $("plot").innerHTML = PLOTS.map(p => `<option value="${p.id}">${esc(p.code)} — ${esc(p.species)}</option>`).join("");
+  await refresh();
+}
+
+async function signIn(){
+  API = $("api").value.trim().replace(/\/+$/, ""); store.set("bp.console.api", API);
+  try {
+    const r = await post("/auth/login", {phone: $("phone").value.trim(), pin: $("pin").value.trim()});
+    TOKEN = r.token; store.set("bp.console.token", TOKEN); $("pin").value = ""; $("loginmsg").textContent = "";
+    boot();
+  } catch(e){ $("loginmsg").textContent = e.message; }
+}
+function signOut(){ TOKEN = null; store.set("bp.console.token", null); $("app").hidden = true; $("login").hidden = false; }
+
+async function refresh(){
+  const [i, events, users, pays, queue] = await Promise.all([
+    j("/impact/summary"), j("/monitoring/events"), j("/users"), j("/payments"), j("/review/queue")]);
+  $("impact").innerHTML = [
+    [i.hectares_under_monitoring, "hectares monitored"], [i.submissions, "submissions"],
+    [i.verified_events, "verified and paid"], [i.awaiting_review, "awaiting review"],
+    [i.seedlings_verified, "seedlings verified"], [i.ksh_paid_to_monitors, "KSh paid to monitors"],
+    [i.indicative_co2_tonnes_per_year, "t CO2/yr (indicative)"],
+  ].map(([v, l]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
+  $("co2note").textContent = "CO2 basis: " + i.co2_basis;
+
+  $("monitor").innerHTML = users.filter(u => u.role === "monitor" && u.active)
+    .map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.public_ref)})</option>`).join("");
+  const pending = users.filter(u => !u.active);
+  $("pending").innerHTML = pending.length ? pending.map(u => `
+    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <div>${esc(u.name)} · ${esc(u.phone)} · ${esc(u.public_ref)}${u.is_minor ? ' <span class="pill warn">minor</span>' : ""}</div>
+      <button style="flex:0" onclick="activate(${u.id})">Activate</button>
+    </div>`).join("") : '<p class="note">Nobody waiting.</p>';
+
+  $("qcount").textContent = queue.length;
+  $("queue").innerHTML = queue.length ? queue.map(q => `
+    <div class="review" id="rv${q.id}">
+      <div>${q.has_photo ? `<img alt="Plot photograph for submission ${q.id}" data-photo="${q.id}">` : '<p class="note">No photograph held.</p>'}
+        ${q.has_marker ? `<img alt="Plot marker for submission ${q.id}" data-photo="${q.id}" data-kind="marker" style="margin-top:8px">` : ''}</div>
+      <div>
+        <b>#${q.id} · ${esc(q.plot_code)}</b> · ${esc(q.monitor_ref)} · ${new Date(q.created_at).toLocaleString()}
+        ${q.monitor_active ? "" : ' <span class="pill badc">account inactive</span>'}
+        <div class="note">Declared <i>${esc(q.reported_species)}</i>; verifier said <b>${esc(q.species_consistent)}</b>${q.species_consistent === "no" ? ` (${esc(q.detected_species)})` : ""}.
+          Health ${esc(q.health)}, ${esc(q.seedlings_visible)} seedlings, confidence ${Math.round((q.confidence||0)*100)}%,
+          ${q.distance_from_plot_m == null ? "no GPS" : Math.round(q.distance_from_plot_m) + " m from plot"}. Verifier: ${esc(q.verification_source)}${q.verifier_samples > 1 ? `, ${q.verifier_samples} samples, self-reported ${Math.round((q.self_reported_confidence||0)*100)}%` : ""}.</div>
+        <div class="note">Marker: ${q.marker_sha256 ? (q.marker_code_read ? `read as ${esc(q.marker_code_read)} (${q.marker_matches ? "matches" : "DOES NOT MATCH"} ${esc(q.plot_code)})` : "unreadable") : "none sent"}.
+          ${q.previous_event_id ? `Versus #${q.previous_event_id}: same place <b>${esc(q.same_location)}</b>, plants ${esc(q.change_vs_previous)}. ${esc(q.change_note || "")}` : "No earlier verified visit to compare."}</div>
+        <div class="note">${esc(q.reasoning)}</div>
+        <ul>${q.review_reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+        <div class="row">
+          <div><label for="h${q.id}">Condition</label><select id="h${q.id}">
+            ${["", "healthy", "stressed", "dead"].map(h => `<option value="${h}" ${h === q.health ? "selected" : ""}>${h || "(as assessed)"}</option>`).join("")}</select></div>
+          <div><label for="s${q.id}">Seedlings</label><input id="s${q.id}" type="number" min="0" value="${esc(q.seedlings_visible)}"></div>
+        </div>
+        <label for="n${q.id}">Reason for your decision (recorded in the audit trail)</label>
+        <textarea id="n${q.id}" rows="2"></textarea>
+        <button onclick="decide(${q.id}, 'approve')">Approve and pay</button>
+        <button class="bad" onclick="decide(${q.id}, 'reject')">Reject</button>
+        <span class="note" id="m${q.id}"></span>
+      </div>
+    </div>`).join("") : '<p class="note">Queue is empty.</p>';
+  document.querySelectorAll("img[data-photo]").forEach(loadPhoto);
+
+  $("pays").innerHTML = pays.map(p => `<tr><td>${p.id}</td><td>${p.monitoring_event_id}</td><td>${p.amount}</td>
+    <td><span class="pill ${p.status === "success" ? "ok" : p.status === "failed" ? "badc" : "warn"}">${p.status}</span></td>
+    <td>${esc(p.mpesa_receipt || "—")}</td><td>${esc(p.failure_reason || "")}</td>
+    <td>${p.status === "failed" && ME.role === "admin" ? `<button style="margin:0" onclick="retryPay(${p.id})">Retry</button>` : ""}</td></tr>`).join("");
+
+  const code = Object.fromEntries(PLOTS.map(p => [p.id, p.code]));
+  $("rows").innerHTML = events.map(e => `<tr>
+    <td>${e.id}</td><td>${esc(code[e.plot_id] || e.plot_id)}</td><td><i>${esc(e.reported_species || "—")}</i></td>
+    <td>${esc(e.species_consistent || "—")}</td><td>${esc(e.health || "—")}</td><td>${Math.round((e.confidence||0)*100)}%</td>
+    <td>${e.distance_from_plot_m == null ? "—" : Math.round(e.distance_from_plot_m) + " m"}</td>
+    <td>${[e.evidence_of_cutting && "cutting", e.pest_damage && "pests"].filter(Boolean).join(", ") || "—"}</td>
+    <td>${esc(e.verification_source)}</td>
+    <td><span class="pill ${e.status === "verified" ? "ok" : e.status === "rejected" ? "badc" : "warn"}">${e.status}</span></td></tr>`).join("");
+}
+
+async function loadPhoto(img){
+  try {
+    const kind = img.dataset.kind ? `?kind=${img.dataset.kind}` : "";
+    const r = await fetch(`${API}/monitoring/events/${img.dataset.photo}/photo${kind}`, {headers: {Authorization: "Bearer " + TOKEN}});
+    if (r.ok) img.src = URL.createObjectURL(await r.blob());
+  } catch {}
+}
+
+async function decide(id, decision){
+  const body = {decision, note: $("n" + id).value};
+  if ($("h" + id).value) body.health = $("h" + id).value;
+  if ($("s" + id).value !== "") body.seedlings_visible = Number($("s" + id).value);
+  try { await post(`/review/${id}`, body); await refresh(); }
+  catch(e){ $("m" + id).textContent = e.message; }
+}
+async function activate(id){ await post(`/users/${id}/activate`, {active: true}); await refresh(); }
+async function retryPay(id){ try { await post(`/payments/${id}/retry`, {}); } catch(e){ alert(e.message); } await refresh(); }
+
+async function submitPlot(){
+  const file = $("photo").files[0];
+  if (!file){ $("result").textContent = "Choose a photograph first."; return; }
+  const plot = PLOTS.find(p => p.id === Number($("plot").value));
+  const fd = new FormData();
+  fd.append("plot_id", plot.id); fd.append("monitor_id", $("monitor").value);
+  fd.append("reported_species", plot.species); fd.append("image", file);
+  fd.append("client_ref", "console-" + Date.now());
+  if ($("atplot").checked){ fd.append("lat", plot.lat); fd.append("lon", plot.lon); }
+  try {
+    const r = await j("/monitoring/submit-photo", {method: "POST", body: fd});
+    const e = r.event;
+    $("result").textContent = `${e.status.toUpperCase()} · ${r.note}\n` +
+      `declared ${e.reported_species}; corroborated: ${e.species_consistent}; health ${e.health}; confidence ${Math.round(e.confidence*100)}%\n` +
+      (e.review_reasons.length ? "Why: " + e.review_reasons.join(" ") + "\n" : "") +
+      (r.payment ? `Payment ${r.payment.status}, KSh ${r.payment.amount}, ref ${r.payment.mpesa_receipt || r.payment.mpesa_ref}` : "");
+  } catch(e){ $("result").textContent = e.message; }
+  await refresh();
+}
+
+async function refreshSat(){
+  try {
+    const s = await j(`/satellite/refresh/${SITE.id}`, {method: "POST"});
+    $("sat").textContent = `mode ${s.mode}; baseline ${s.baseline_ndvi} (${s.baseline_source})\n${s.observations} observations, ${s.usable_after_cloud} usable after cloud\n` +
+      `${s.alerts} sustained canopy loss alert(s)\nlatest NDVI change vs baseline: ${s.latest_change_vs_baseline}`;
+  } catch(e){ $("sat").textContent = e.message; }
+}
+async function genReport(){
+  const r = await j(`/mrv/report/${SITE.id}`);
+  $("report").textContent = `[${r.generated_by}]\n\n` + r.narrative;
+}
+async function verifyLedger(){
+  const v = await j("/ledger/verify");
+  $("ledger").textContent = v.ok ? `Intact. ${v.entries} entries.\nHead: ${v.head || "(empty)"}` : `BROKEN at entry ${v.first_bad_id}: ${v.problem}`;
+}
+boot();
+</script>
+</body>
+</html>

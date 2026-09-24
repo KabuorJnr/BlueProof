@@ -1,0 +1,12 @@
+.env
+*.key
+OPENROUTER*
+photos/
+labels.csv
+llama_eval_results.csv
+__pycache__
+*.db
+.venv/
+node_modules/
+data/
+.pytest_cache/

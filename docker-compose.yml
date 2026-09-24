@@ -1,0 +1,38 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      # Photographs and the SQLite file live here so a rebuild does not lose evidence.
+      - bp-data:/data
+    environment:
+      DATABASE_URL: sqlite:////data/blueproof.db
+      PHOTO_DIR: /data/photos
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Runs in mock mode with demo accounts and no config. To go live, create
+    # backend/.env from .env.example; the app reads it automatically.
+
+  app:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./app:/app
+    command: sh -c "npm install --no-audit --no-fund && npm run build && npm run preview -- --host 0.0.0.0"
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+
+  dashboard:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+
+volumes:
+  bp-data:

@@ -1,0 +1,65 @@
+# Render blueprint: a public backend URL, the hosted field app, and the console.
+#
+# Deploy: push this repo to GitHub, then in Render choose New > Blueprint.
+#
+# IMPORTANT for anything beyond a demo:
+#   * The free tier filesystem is ephemeral. SQLite and PHOTOS are lost on
+#     redeploy and idle spin down. Photographs are evidence. For the pilot add a
+#     Render PostgreSQL instance (DATABASE_URL) and a persistent disk mounted at
+#     /data (PHOTO_DIR=/data/photos), which needs a paid instance.
+#   * ENVIRONMENT=production refuses to start without SECRET_KEY, and without
+#     the full set of MPESA_* values when MPESA_MODE is not mock.
+
+services:
+  - type: web
+    name: blueproof-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEMO_SEED
+        value: "true"          # remove for the pilot
+      - key: MPESA_MODE
+        value: mock
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MPESA_CALLBACK_TOKEN
+        generateValue: true
+      - key: CORS_ORIGINS
+        # Replace with the URLs Render assigns to the app and console.
+        value: https://blueproof-app.onrender.com,https://blueproof-console.onrender.com
+      # Set in the Render dashboard, never in this file:
+      #   ADMIN_PHONE, ADMIN_PIN
+      #   LLAMA_API_URL, LLAMA_API_KEY
+      #   COPERNICUS_CLIENT_ID, COPERNICUS_CLIENT_SECRET
+      #   MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE,
+      #   MPESA_INITIATOR_NAME, MPESA_SECURITY_CREDENTIAL, PUBLIC_BASE_URL
+
+  - type: web
+    name: blueproof-app
+    runtime: static
+    buildCommand: cd app && npm install && npm run build
+    staticPublishPath: ./app/dist
+    plan: free
+    envVars:
+      - key: VITE_API_BASE
+        # Replace with the URL Render assigns to blueproof-api.
+        value: https://blueproof-api.onrender.com
+    headers:
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: blueproof-console
+    runtime: static
+    staticPublishPath: ./dashboard
+    plan: free

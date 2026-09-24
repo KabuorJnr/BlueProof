@@ -1,0 +1,6 @@
+filename,species,health,cutting,pests
+TC-A-001-close-01.jpg,Rhizophora mucronata,healthy,0,0
+TC-A-001-close-02.jpg,Rhizophora mucronata,stressed,0,0
+TC-A-002-close-01.jpg,Avicennia marina,healthy,0,0
+TC-B-007-close-01.jpg,Sonneratia alba,stressed,0,1
+TC-B-007-close-02.jpg,Sonneratia alba,dead,1,1

@@ -1,0 +1,1027 @@
+\documentclass[10pt,twocolumn,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\usepackage[scaled=0.92]{helvet}
+\usepackage{courier}
+\usepackage[a4paper,top=1.9cm,bottom=2.2cm,left=1.7cm,right=1.7cm,columnsep=0.65cm]{geometry}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\captionsetup[table]{font=small,labelfont=bf,skip=4pt}
+\captionsetup[figure]{font=small,labelfont=bf,skip=4pt}
+
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection.}{0.6em}{}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\titlespacing*{\subsection}{0pt}{8pt}{3pt}
+
+\setlist[itemize]{leftmargin=1.1em,itemsep=1pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.4em,itemsep=1pt,topsep=3pt}
+
+\renewcommand{\baselinestretch}{1.02}
+
+\begin{document}
+
+\twocolumn[
+\begin{@twocolumnfalse}
+\begin{center}
+{\LARGE\bfseries BlueProof: Community-Verified Mangrove Restoration Monitoring\\[2pt]
+with Vision-Language Models and Conditional Mobile Payments\par}
+\vspace{10pt}
+{\large Rooney Odhiambo\par}
+\vspace{3pt}
+{\normalsize GovTech Builders KE\\
+Technical University of Mombasa, Kenya\\
+\texttt{rooneyodhiambo2004@gmail.com}\par}
+\vspace{10pt}
+\end{center}
+
+\begin{quote}
+\small
+\noindent\textbf{Abstract}---Kenya holds roughly 61{,}271 hectares of mangrove
+forest, storing some of the densest carbon stocks of any tropical ecosystem, yet
+the forest continues to be lost to cutting, urban encroachment and pest damage.
+Community-led blue carbon projects demonstrably work, but they have not scaled:
+the pioneering Kenyan project has issued only tens of thousands of credits in
+fifteen years. We argue that the binding constraint is not a shortage of willing
+communities but the cost and latency of monitoring, reporting and verification
+(MRV). This paper presents BlueProof, a system design in which community
+monitors submit geotagged plot photographs, a vision-language model (VLM)
+performs bounded corroboration of those submissions, deterministic satellite
+analysis provides canopy-scale context, and verified submissions trigger
+immediate conditional mobile-money payment. We make the architectural role of
+the VLM deliberately narrow. Recent evidence shows general-purpose VLMs degrade
+sharply on field imagery relative to curated photographs and fabricate species
+names at non-trivial rates, so BlueProof does not treat the model as an
+authoritative taxonomic oracle. Instead the model corroborates a
+monitor-declared species, assesses image legibility and plot condition, flags
+cutting and pest damage, and abstains into human review when confidence is low.
+We further argue for an incentive design that pays for verified \emph{reporting}
+rather than for seedling survival, on the grounds that paying for outcomes
+creates a direct incentive to conceal mortality. We situate the design against
+the closest existing deployment, Ericsson's Connected Mangroves in Malaysia,
+and argue that its premise transfers to Kenya while its apparatus does not:
+fixed environmental sensors address growing conditions under corporate
+sponsorship and volunteer labour, whereas the Kenyan constraint is attestation
+cost in the absence of a sponsor, with mobile money affording a payment loop the
+Malaysian model had no reason to build. We describe a reference
+implementation and, because no field data has yet been collected, we set out a
+pre-registered evaluation protocol with explicit metrics, baselines and
+falsification criteria rather than reporting results. We state the ecological,
+legal and equity limitations of the approach, including the risk that cheaper
+verification expands credit supply without improving what a community monitor
+earns.
+\vspace{6pt}
+
+\noindent\textbf{Keywords}---mangrove restoration, blue carbon, MRV,
+vision-language models, participatory monitoring, mobile money, Kenya
+\end{quote}
+\vspace{12pt}
+\end{@twocolumnfalse}
+]
+
+\section{Introduction}
+
+Mangroves occupy a small fraction of the world's forested area but store carbon
+at densities far above most terrestrial forests, buffer coastlines against
+storm surge, and support inshore fisheries. In Kenya they cover approximately
+61{,}271 hectares, of which about 35{,}678 hectares, some 62 percent, lie in
+Lamu County~\cite{kairo2021}. Measured total ecosystem carbon stocks in Lamu
+average $560.22 \pm 79.79$~Mg~C~ha$^{-1}$, with 70.3 percent of that carbon
+held below ground in soil rather than in standing
+biomass~\cite{kairo2021}. That distribution matters for monitoring: most of the
+carbon at risk is invisible from above, and is released by disturbance of the
+sediment rather than only by removal of the canopy.
+
+The forest is under sustained pressure. Between 1990 and 2019 Lamu alone lost
+1{,}739 hectares, a decline of roughly 60 hectares per year, with associated
+emissions estimated at 30{,}840~Mg~CO$_2$e~yr$^{-1}$~\cite{kairo2021}. Drivers
+differ by county. In Lamu and Kilifi the historical driver has been
+overharvesting for construction poles and fuelwood. Around Mombasa, and
+specifically in Tudor Creek and Port Reitz, urban encroachment and effluent are
+dominant. Pest damage to \emph{Sonneratia alba}, a frontline species in the
+seaward zone, has emerged as a compounding threat, while \emph{Xylocarpus
+granatum} is selectively removed for carving and construction.
+
+Community-led restoration and protection is not an untested idea in this
+setting. Mikoko Pamoja at Gazi Bay, Kwale County, began in 2010 and is generally
+described as the world's first community-led blue carbon project, involving
+1{,}081 participating households~\cite{planvivo}. It works. What it has not done
+is scale: the project has issued on the order of $2.2 \times 10^{4}$ certified
+credits across roughly fifteen years~\cite{planvivo}. Against a national estate
+of 61{,}271 hectares and a national loss rate measured in tens of hectares per
+year, that is a rounding error.
+
+The natural question is why a demonstrably functional model has not replicated.
+Our position, which this paper formalises into a system design and an
+evaluation protocol rather than asserting as established fact, is that the
+binding constraint is the cost, latency and expertise-dependence of MRV. A
+recent systematic treatment of MRV in carbon farming finds that monitoring
+consumes the largest share of total MRV expenditure, that field sampling is the
+most labour-intensive component, and that cost burdens fall disproportionately
+on smaller operations to the point of threatening their economic
+viability~\cite{vanderheyden2026}. The same work finds that digitalisation
+measures such as automated data entry can halve data-entry time, and concludes
+that policy support is likely required for MRV systems to be scalable for
+smaller participants~\cite{vanderheyden2026}. A community forest association
+managing tens of hectares of creek-side mangrove faces precisely this structure:
+the verification machinery costs roughly what it costs regardless of project
+size, so small projects are priced out of the market that would pay them.
+
+\subsection{Contributions}
+
+This paper makes four contributions.
+
+\begin{enumerate}[label=(\arabic*)]
+\item A system architecture for community mangrove MRV that separates
+deterministic computation (vegetation indices, thresholds, payment rules,
+ledger integrity) from probabilistic perception (image interpretation, natural
+language), and makes that boundary explicit and auditable.
+\item A deliberately \emph{bounded} role for a vision-language model, motivated
+by published evidence on VLM failure modes in field imagery, in which the model
+corroborates rather than determines species, and abstains into human review
+under a calibrated confidence threshold.
+\item An incentive design that pays community monitors for verified
+\emph{reporting} rather than for seedling survival, with an argument for why
+outcome-linked payment is expected to corrupt the underlying data.
+\item A pre-registered evaluation protocol with named metrics, baselines and
+falsification criteria, published in advance of data collection, together with
+an explicit statement of the ecological, legal and equity limitations of the
+approach.
+\item A structured transferability analysis against the closest existing
+deployment, Ericsson's Connected Mangroves in Malaysia, identifying which of its
+findings generalise to the Kenyan setting and which of its architectural choices
+are artefacts of a sponsorship and labour model that Kenya does not share.
+\end{enumerate}
+
+We deliberately report no accuracy figures, no pilot outcomes and no cost
+savings. None have been measured. Section~\ref{sec:eval} specifies how they
+should be measured and what result would falsify the central claim.
+
+\section{Background and Related Work}
+
+\subsection{Remote Sensing of Mangrove Extent and Condition}
+
+Satellite monitoring of mangrove extent is mature. Sentinel-2 provides
+multispectral imagery at 10~m ground sample distance for the visible and
+near-infrared bands with a revisit interval of roughly five days, and its time
+series have been used to map mangrove extent, track disturbance and characterise
+recovery trajectories~\cite{s2monitoring,rsreview}. Multi-index approaches
+combining vegetation, water and soil indices with machine learning classifiers
+have been applied to mangrove dynamics assessment using Sentinel-2
+imagery~\cite{multiindex}.
+
+Two limitations bear directly on our design. First, resolution. At 10~m, a
+single pixel covers 100~m$^2$. This is adequate for detecting stand-level
+clearing and for tracking canopy closure across a restoration block, and wholly
+inadequate for observing whether an individual propagule planted three months
+ago is alive. Any claim that satellite data verifies planting survival at plot
+level is unsupportable. Second, cloud. Optical revisit frequency is nominal, not
+effective; the Kenyan coast has substantial cloud cover, and the usable optical
+record is considerably sparser than the five-day figure implies. Synthetic
+aperture radar, which penetrates cloud, is the standard mitigation and is
+treated here as future work rather than as an implemented capability.
+
+The consequence is a division of labour rather than a choice: satellite data
+supplies hectare-scale context and loss alerting, and ground observation
+supplies plot-scale truth. Neither substitutes for the other.
+
+\subsection{MRV Cost as the Scaling Constraint}
+
+The MRV literature supports treating verification cost as a first-order design
+variable. Vanderheyden et al.~\cite{vanderheyden2026} decompose MRV cost into
+monitoring approach, project design parameters such as farm count and monitoring
+frequency, and protocol requirements, and find monitoring to be the dominant
+cost component with field sampling the most labour-intensive element. Their
+finding that digitalisation can halve data-entry time establishes that process
+automation yields real savings, while their conclusion that smallholder
+scalability likely requires policy support indicates that automation alone may
+be insufficient. We take both findings seriously: BlueProof is positioned as a
+cost-reduction instrument whose sufficiency is an empirical question, not a
+settled one.
+
+\subsection{Vision-Language Models for Field Species Identification}
+\label{sec:vlmrelated}
+
+This subsection is the reason the system is designed the way it is.
+
+A natural design for participatory monitoring is to let a general-purpose
+vision-language model identify what is in a submitted photograph. Recent
+evidence argues strongly against relying on that capability without guardrails.
+Zhou et al.~\cite{zhou2026} evaluate general-purpose VLMs in the 2--8B parameter
+range against a specialised model on a 96-species identification task. They
+report three findings that constrain any system of this kind. Every model
+evaluated, general-purpose or specialist, degrades sharply when moving from
+curated photographs to field imagery, with domain gaps of 9.6 to 26.6 percentage
+points. The specialised model outperforms the general-purpose VLMs by 33.2 to
+59.2 percentage points. And the general-purpose models fabricate species names
+at rates of 5.9 to 9.6 percent.
+
+Notably, the authors characterise the degradation as reflecting general image
+legibility rather than a failure of fine-grained discrimination as such. That
+distinction is actionable. It suggests that a VLM may be more reliable when
+asked whether an image is legible and what condition is visible than when asked
+to commit to a species label, and that legibility assessment is itself a useful
+product of the model.
+
+Three design consequences follow, and we adopt all three.
+
+\begin{itemize}
+\item \textbf{Do not make the VLM the taxonomic authority.} Species is declared
+by the monitor, who is standing at the plot and typically planted it, and the
+model corroborates or disputes that declaration. A dispute is a signal for
+review, not an automatic overwrite.
+\item \textbf{Make abstention a first-class output.} A fabrication rate near ten
+percent is unacceptable in a record that a carbon buyer will rely on. The system
+must be able to decline.
+\item \textbf{Leave room for a specialist model.} Where taxonomic precision is
+required, the architecture should admit a domain-trained classifier of the kind
+that outperformed general VLMs in~\cite{zhou2026}, with the VLM retained for the
+open-ended judgements it handles well.
+\end{itemize}
+
+\subsection{Participatory Monitoring and the Expertise Bottleneck}
+
+Participatory and citizen-science monitoring has an established record in
+ecology, and the appeal in this setting is obvious: the people best positioned
+to observe a creek-side plot weekly are the people who live beside it and
+planted it. The recurring difficulty is not willingness or diligence but
+credibility. A carbon standard requires evidence that an auditor will accept,
+and the conventional route to that acceptance is expert presence, which is the
+precise cost that~\cite{vanderheyden2026} identifies as dominant and as
+regressive against small projects.
+
+This produces a bottleneck with a specific shape. Observation is cheap and
+abundant; attestation is expensive and scarce. Systems that respond by sending
+experts to observe do not scale. Systems that respond by simply trusting
+self-report do not clear the credibility bar. The interesting design space lies
+between: mechanisms that let abundant lay observation carry an attestation
+burden it could not carry alone, by adding independent corroboration and by
+making the incentive structure of the reporter inspectable. BlueProof is an
+attempt to occupy that space, and the two corroborating signals it adds are
+machine assessment of the submitted image and satellite observation of the
+surrounding canopy.
+
+\subsection{Gap}
+
+Existing work establishes that satellite monitoring of mangroves is feasible at
+canopy scale, that MRV cost is a dominant and regressive constraint, and that
+general VLMs are unreliable taxonomic oracles on field imagery. What is missing
+is a system design that accepts all three findings simultaneously: one that uses
+satellite data only for what it can support, uses a VLM only for what the
+evidence says it can do, and couples verification to a payment mechanism whose
+incentive structure does not corrupt the data being verified. BlueProof is a
+proposal for such a system.
+
+\section{Precedent and Transferability: Connected Mangroves}
+\label{sec:malaysia}
+
+The proposition that networked technology can improve mangrove restoration
+outcomes is not speculative. It has been demonstrated at field scale in
+Malaysia. Because that deployment is the closest existing precedent to the
+present work, and because it differs from the Kenyan setting in ways that are
+instructive rather than incidental, we treat it as a comparative case rather
+than a citation.
+
+\subsection{The Malaysian Deployment}
+
+Ericsson launched the Connected Mangroves project in Selangor, Malaysia, in
+October 2015, working with a local technology partner, the Global Environment
+Centre and the community of Kampung Dato Hormat~\cite{unfccc2015,ericsson2019}.
+Sensor systems deployed among planted saplings measure soil moisture,
+temperature and electrical conductivity together with ambient humidity and water
+level, relay readings over commercial cellular networks, and present them
+through a cloud dashboard accessible to community leaders, non-governmental
+organisations, analysts and authorities, with automated alerts when thresholds
+are breached~\cite{unfccc2015}. Each sensor installation covers roughly
+2{,}500~m$^2$, on the order of 200 mangrove plants~\cite{unfccc2015}.
+
+The reported results are meaningful. Against a regional baseline in which only
+about 40 percent of planted seedlings reach maturity, the project targeted a 50
+percent improvement in survival, beginning with 200 seedlings in a first phase
+and scaling to 1{,}000~\cite{unfccc2015}. Subsequent reporting describes
+survival of approximately 80 percent across roughly 4{,}000 saplings planted in
+Malaysia, with the model replicated to a site in the
+Philippines~\cite{ericsson2019}.
+
+\subsection{What the Precedent Establishes, and What It Does Not}
+
+Connected Mangroves establishes three things that we adopt without reservation.
+Restoration survival is responsive to information: knowing that a plot is
+drying or inundated, in time to act, materially changes outcomes. Community
+custodianship is compatible with instrumentation. And a mangrove restoration
+technology programme can be sustained for the better part of a decade, which is
+longer than most pilots survive.
+
+It does not, however, establish what BlueProof needs to establish, and the
+difference is not one of degree. Connected Mangroves is an \emph{agronomic
+telemetry} system. It measures the abiotic conditions in which seedlings grow,
+so that people can intervene. It does not attest that a particular person
+performed a particular act of stewardship at a particular place and time, which
+is the artefact a carbon standard purchases and the artefact that community
+projects cannot currently produce cheaply. A soil moisture reading tells you the
+ground is dry. It does not tell you that Amina planted forty propagules on
+Tuesday, nor does it pay her for having done so.
+
+The two systems therefore solve adjacent but distinct problems: one optimises
+growing conditions, the other manufactures verifiable evidence and couples it to
+compensation.
+
+\subsection{Points of Divergence}
+
+Table~\ref{tab:malaysia} sets out the structural differences that bear on
+transferability.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Structural comparison between the Malaysian Connected Mangroves
+deployment and the constraints facing a Kenyan community mangrove project.}
+\label{tab:malaysia}
+\begin{tabular}{@{}p{3.1cm}p{6.2cm}p{6.2cm}@{}}
+\toprule
+& \textbf{Connected Mangroves, Malaysia} & \textbf{Kenyan coastal community project} \\
+\midrule
+Problem addressed & Seedling survival under variable conditions & Verifiable attestation for carbon finance \\
+Primary sensing & Fixed abiotic sensors among saplings & Human observation of plot condition \\
+Who bears the cost & Corporate sponsor supplies hardware and connectivity & Project must self-finance from verification value \\
+Coverage density & One installation per {\raise.17ex\hbox{$\scriptstyle\sim$}}0.25~ha & Must cover tens of hectares per monitor \\
+Community role & Volunteer planting and basic maintenance & Paid monitoring as a livelihood \\
+Payment loop & None; information is the output & Conditional payment on verified submission \\
+Governance context & State forestry with long silvicultural tradition & Gazetted reserve, co-managed, contested use \\
+Infrastructure advantage & Cellular IoT backhaul & Near-universal mobile money \\
+Dominant failure risk & Sensor maintenance and sponsor withdrawal & Verification credibility and model error \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Four of these deserve elaboration.
+
+\textbf{The sponsorship question is decisive.} Connected Mangroves is
+underwritten by a telecommunications vendor supplying hardware, connectivity and
+volunteer labour. That is a legitimate and generous arrangement, and it means
+the project's unit economics are not the project's own. A Kenyan community
+forest association has no standing equivalent. Any design that assumes donated
+hardware inherits a dependency that, if withdrawn, ends the programme. BlueProof
+therefore carries no per-site capital cost by construction, which is the
+strongest single argument for community photography over instrumentation in
+Table~\ref{tab:modalities}.
+
+\textbf{Sensor density does not scale to a national estate.} At one installation
+per 0.25~hectare, covering Kenya's 61{,}271 hectares~\cite{kairo2021} would
+require on the order of $2.4 \times 10^{5}$ installations. Even the 42-hectare
+site considered in this work would require roughly 170. The Malaysian density is
+appropriate for an intensively studied demonstration plot and is not a national
+monitoring architecture. Human observers scale differently: a monitor already
+lives beside the creek, walks it anyway, and can cover hectares rather than
+fractions of one.
+
+\textbf{Kenya holds an infrastructure advantage the Malaysian project could not
+use.} Mobile money is close to universal in Kenya, which makes it possible to
+settle a payment to an individual monitor within seconds of a verification
+passing. Connected Mangroves informs its stakeholders; it does not pay them per
+verified act, and in a volunteer model there is no reason it should. The
+conditional payment loop is not a refinement of the Malaysian design. It is a
+mechanism Kenya can build that Malaysia's infrastructure and labour model did
+not call for, and it converts conservation from an activity that costs a
+community time into one that returns income.
+
+\textbf{The Malaysian success metric is a trap if imported directly.} The
+headline result is survival rising from roughly 40 percent to roughly 80
+percent~\cite{unfccc2015,ericsson2019}. As a measure of ecological outcome that
+is exactly right. As a basis for paying people it is hazardous, for the reason
+set out in Section~\ref{sec:incentive}: once survival determines income, the
+reporter acquires an interest in the number. Connected Mangroves is insulated
+from this because its survival figures come from instruments rather than from
+paid reporters. A Kenyan system that pays monitors and simultaneously grades
+them on survival would not be insulated, and would corrupt the very statistic it
+was built to produce.
+
+\subsection{Implication for the Present Design}
+
+The transferable lesson from Malaysia is the premise, not the apparatus.
+Information improves restoration outcomes, and communities will sustain a
+technology programme over years. The apparatus does not transfer, because the
+Kenyan binding constraints are attestation cost, absence of a sponsor and the
+need for the work to pay, none of which fixed environmental sensors address.
+
+BlueProof can therefore be read as the Malaysian premise reconstructed under
+Kenyan constraints: observation performed by people rather than instruments,
+because people are already present and instruments must be bought and
+maintained; verification performed by a model with a bounded and auditable role,
+because expert attestation is the scarce resource; and compensation settled
+immediately over mobile money, because that is the infrastructure Kenya actually
+has and because a conservation system that pays the people doing the
+conservation is more likely to persist than one that does not.
+
+\section{System Design}
+
+\subsection{Design Principles}
+
+\textbf{P1: Separate the deterministic from the probabilistic.} Vegetation
+index computation, cloud screening, confidence thresholds, payment arithmetic
+and ledger construction are ordinary code with defined behaviour. Image
+interpretation and natural language generation are probabilistic. The boundary
+is explicit in the module structure so that each side can be audited on its own
+terms. A recurring failure in applied machine learning for conservation is
+delegating arithmetic or geometry to a language model; we avoid it by
+construction.
+
+\textbf{P2: Abstain rather than guess.} Given the fabrication rates reported
+in~\cite{zhou2026}, the system treats low confidence as a routing decision, not
+a discount factor. Submissions below a configured confidence threshold, or
+whose assessed condition is \emph{unclear}, are escalated to human review and
+trigger no payment.
+
+\textbf{P3: Pay for verified reporting, not for outcomes.} This is discussed in
+Section~\ref{sec:incentive}.
+
+\textbf{P4: Degrade gracefully.} Field monitors work in locations with
+intermittent connectivity and on inexpensive handsets. Every external dependency
+in the reference implementation has a deterministic offline mode, and the
+assistant falls back to rule-based responses if the model endpoint is
+unavailable, so that a monitor in the field is never left without an answer.
+
+\subsection{Architecture}
+
+Figure~\ref{fig:pipeline} shows the chain of custody from field observation to
+verified record.
+
+\begin{figure}[t]
+\centering
+\small
+\begin{tabular}{@{}c@{}}
+\hline
+\rule{0pt}{2.4ex}Monitor captures geotagged plot photograph\\
+\hline
+$\downarrow$\\
+\hline
+\rule{0pt}{2.4ex}VLM bounded assessment: legibility, condition,\\
+species corroboration, cutting, pests, confidence\\
+\hline
+$\downarrow$\\
+\hline
+\rule{0pt}{2.4ex}Threshold gate: confidence $\geq \tau$ and condition known?\\
+\emph{No} $\rightarrow$ human review queue, no payment\\
+\hline
+$\downarrow$ \emph{Yes}\\
+\hline
+\rule{0pt}{2.4ex}Conditional mobile-money payment to monitor\\
+\hline
+$\downarrow$\\
+\hline
+\rule{0pt}{2.4ex}Append-only stewardship ledger entry\\
+\hline
+$\downarrow$\\
+\hline
+\rule{0pt}{2.4ex}Satellite corroboration at site scale (NDVI, cloud-screened)\\
+\hline
+$\downarrow$\\
+\hline
+\rule{0pt}{2.4ex}Report generation: facts assembled in code,\\
+narrative drafted by language model\\
+\hline
+\end{tabular}
+\caption{The BlueProof verification and payment pipeline. Probabilistic
+components are confined to the second and final stages; all gating arithmetic
+is deterministic.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Data Model and Chain of Custody}
+
+The schema encodes provenance explicitly. A \emph{Site} carries a boundary
+polygon, an area and a baseline vegetation index. A \emph{Plot} belongs to a
+site and carries a field code, a declared species, a planting date, a count of
+seedlings planted and a coordinate. A \emph{MonitoringEvent} belongs to a plot
+and a monitor and carries both the monitor's declaration and the model's
+assessment as separate fields, so that agreement and disagreement remain
+recoverable after the fact. A \emph{SatelliteObservation} belongs to a site and
+carries an index value, a change against baseline, a cloud fraction and an alert
+flag. A \emph{Payment} belongs to a monitoring event. A \emph{LedgerEntry} is
+written only after a payment settles and denormalises the verified facts into an
+append-only record: site, plot, species, count verified, condition, the named
+monitor, the amount paid and the coordinate.
+
+Two properties of this schema matter for verification integrity. First, the
+monitor's claim and the model's assessment are never merged into a single
+field, so a later auditor can compute agreement rates and detect drift. Second,
+the ledger records the amount paid alongside the ecological facts, which makes
+the distribution of benefit inspectable rather than inferred. We return to why
+that matters in Section~\ref{sec:equity}.
+
+\subsection{Bounded Role of the Vision-Language Model}
+
+The model is asked four questions about a submitted photograph, in this order of
+confidence in its answers:
+
+\begin{enumerate}[label=(\alph*)]
+\item \textbf{Is this image legible enough to assess?} Following~\cite{zhou2026},
+legibility is treated as the primary determinant of downstream reliability and
+is therefore assessed explicitly rather than implied by a confidence score.
+\item \textbf{What condition is visible?} Healthy, stressed, dead or unclear.
+This is a coarse ordinal judgement over a visually salient property.
+\item \textbf{Is there evidence of cutting or pest damage?} Stumps, cut poles and
+axe marks; boring holes, frass and dieback. These are presence detections of
+conspicuous features, and are treated as recall-oriented: a false positive costs
+a human review, a false negative loses a deforestation event.
+\item \textbf{Is the monitor's declared species consistent with the image?}
+Corroboration, not determination. Disagreement routes to review.
+\end{enumerate}
+
+The model is given the nine mangrove species recorded in Kenya as a closed
+label set, which reduces the space in which fabrication can occur, and any
+returned label outside that set is coerced to \emph{unclear} rather than
+accepted. The architecture reserves a slot for a domain-trained classifier to
+replace the model on question~(d), consistent with the specialist advantage
+reported in~\cite{zhou2026}.
+
+\subsection{Satellite Corroboration}
+
+For each site, a normalised difference vegetation index series is computed from
+Sentinel-2 red and near-infrared bands over the site polygon and compared
+against a stored baseline. Observations whose cloud fraction exceeds a
+configured maximum are excluded from alerting rather than down-weighted, on the
+principle that an untrustworthy observation should not contribute to a decision
+that moves money or triggers an enforcement response. A sustained negative
+change beyond a configured threshold raises a canopy-loss alert for the site.
+
+The satellite layer is explicitly \emph{corroborative}. It cannot confirm plot
+survival, and the system does not claim that it does. Its value is threefold: it
+detects loss the field record might miss because nobody was sent to look, it
+provides an independent signal against which systematic misreporting would show
+up as divergence, and it supplies the landscape-scale context a report requires.
+
+\subsection{Alternative Sensing Modalities Considered}
+
+Community smartphone photography is not the only way to gather evidence from a
+mangrove stand, and the choice deserves justification rather than assumption.
+Table~\ref{tab:modalities} compares four candidate modalities against the
+constraints that actually bind a small project in this setting.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Sensing modalities for community mangrove monitoring, assessed against
+constraints binding on a small coastal project.}
+\label{tab:modalities}
+\begin{tabular}{@{}lllll@{}}
+\toprule
+& \textbf{Community photography} & \textbf{UAV survey} & \textbf{Passive acoustics} & \textbf{Fixed IoT sensors} \\
+\midrule
+Capital cost per site & None; existing handsets & High & Moderate per node & Moderate to high \\
+Regulatory burden & None & Pilot licence, operator cert. & None & None \\
+Realistic time to deploy & Days & Weeks to months & Weeks & Weeks \\
+Field maintenance & None beyond the handset & Skilled operator & Retrieval, batteries & Power, theft, corrosion \\
+Primary observable & Plot condition, disturbance & Canopy structure, extent & Faunal activity & Abiotic conditions \\
+Plot-level survival & Yes & Partially & No & No \\
+Community acceptance & High; participants are paid & Contested; surveillance framing & Neutral & Neutral \\
+Generates livelihood & Yes & No & No & No \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Two of these deserve comment. Uncrewed aerial survey produces the most
+compelling imagery and is the weakest practical fit. In Kenya, drone operation
+requires registration supported by police clearance, and operation beyond the
+most restricted category requires a remote pilot licence together with
+operational authorisation, with commercial operation requiring an operator
+certificate; processing timelines are on the order of a
+month~\cite{kcaa}. For a small project this converts a technical question into an
+administrative one, and an autonomous patrol falls squarely in the categories
+requiring prior authorisation. There is also a social cost that is easy to
+overlook: aerial cameras operating over a settlement read as surveillance
+regardless of intent, which is corrosive in a context where the system depends on
+voluntary participation.
+
+Passive acoustic monitoring is scientifically attractive, particularly for
+faunal recovery, which is a genuine gap in vegetation-only assessment. It does
+not observe seedling survival, requires hardware deployment and retrieval, and
+depends on labelled regional audio that does not presently exist for this
+coastline. We regard it as a valuable complement at a later stage rather than a
+foundation.
+
+The decisive argument for community photography is not sensing performance. It
+is that it is the only modality in Table~\ref{tab:modalities} that transfers
+income to the community performing the conservation work. The observation and
+the livelihood are the same act. Every other modality treats the community as a
+subject of measurement rather than a participant in it.
+
+\subsection{Conditional Payment}
+\label{sec:incentive}
+
+Payment is released only after a monitoring event passes the verification gate,
+and is delivered over mobile money, which in the Kenyan context means a
+near-instant transfer to a handset the monitor already owns.
+
+The design decision that requires defending is what the payment is \emph{for}.
+BlueProof pays a flat amount per verified submission. It does not pay per
+surviving seedling.
+
+The argument is one of incentive compatibility. If payment is proportional to
+survival, a monitor who discovers that half a plot has died faces a direct
+financial penalty for reporting it accurately. The rational response is to
+photograph the surviving half, to report optimistically, or to replant before
+the assessment. Every one of those responses degrades exactly the data that the
+carbon buyer is purchasing, and the degradation is invisible precisely because
+the monitoring system has been trained on the resulting data. Paying for honest,
+verifiable reporting inverts this: mortality reported is still paid work, so the
+monitor's interest and the buyer's interest coincide. The verified record
+becomes worth something because it is not distorted by the mechanism that
+produced it.
+
+This decision has a cost. It decouples payment from ecological outcome, which
+some funders will dislike, and it means that a monitor can in principle be paid
+for reporting a failed restoration. We consider that the correct trade: the
+alternative purchases a number that looks better and means less. We propose a
+field experiment to test the claim empirically in Section~\ref{sec:eval}.
+
+\subsection{Report Generation}
+
+Monitoring standards require a structured narrative. In BlueProof the
+quantitative content of that narrative is assembled deterministically from the
+ledger and the satellite series, and the language model receives those figures
+as structured input with instructions to use only the supplied numbers, to state
+plainly where evidence is weak or contradictory, and to flag divergence between
+the field record and the satellite signal. The model is never asked to retrieve
+or estimate a quantity. If the model endpoint is unavailable, a deterministic
+template produces the same figures without narrative prose, so the report
+pipeline has no hard dependency on model availability.
+
+\section{Reference Implementation}
+
+A reference implementation exists and exercises the full pipeline end to end.
+The backend is a Python service built on FastAPI with SQLModel over SQLite,
+chosen so that the system runs with no infrastructure provisioning during
+evaluation; the storage layer is portable to PostgreSQL, and the geometry
+representation to PostGIS, when spatial querying becomes necessary. The service
+exposes endpoints for site and plot registration, photograph assessment,
+monitoring submission with integrated verification and payment, satellite series
+refresh, report generation and an impact rollup, together with a monitor-facing
+assistant endpoint intended for a messaging channel.
+
+Table~\ref{tab:api} summarises the service surface and, for each operation,
+which side of the deterministic--probabilistic boundary it falls on.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Service operations and their computational character. Probabilistic
+components are confined to three operations, all of which have deterministic
+fallbacks.}
+\label{tab:api}
+\begin{tabular}{@{}p{3.35cm}p{4.0cm}@{}}
+\toprule
+\textbf{Operation} & \textbf{Character} \\
+\midrule
+Register site, plot & Deterministic \\
+Assess photograph & Probabilistic; closed label set \\
+Submit monitoring event & Deterministic gate over a probabilistic assessment \\
+Release payment & Deterministic; gated \\
+Write ledger entry & Deterministic; append-only \\
+Refresh satellite series & Deterministic; cloud-screened \\
+Generate report & Facts deterministic; narrative probabilistic \\
+Field assistant & Probabilistic; rule-based fallback \\
+Impact rollup & Deterministic \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Every external dependency has a deterministic offline mode: the vision model,
+the satellite source and the payment rail can each be independently switched to
+a live provider through configuration without code change. This is a testing
+convenience, but it is also a field requirement, since demonstrations and
+training sessions frequently happen without reliable connectivity.
+
+The monitor-facing assistant answers practical questions in Swahili with some
+English, covering species zonation, spacing, how to record a plot and when
+payment is released. Zonation guidance follows the standard structure of Kenyan
+mangrove stands, with \emph{Rhizophora mucronata} in regularly inundated lower
+zones, \emph{Avicennia marina} in higher and more saline areas, \emph{Ceriops
+tagal} intermediate, and \emph{Sonneratia alba} seaward.
+
+We report no performance measurements for this implementation. It has been
+exercised only against synthetic inputs.
+
+\section{Proposed Evaluation}
+\label{sec:eval}
+
+Because no field data has been collected, we specify the evaluation in advance,
+including the results that would falsify the central claim.
+
+\subsection{Research Questions}
+
+\textbf{RQ1.} Can a general-purpose VLM, restricted to a closed set of nine
+Kenyan mangrove species, corroborate a monitor-declared species on field
+photographs at a rate useful for triage, and at what abstention rate?
+
+\textbf{RQ2.} What is the model's recall for conspicuous disturbance, namely
+cutting and pest damage, relative to an expert field assessment?
+
+\textbf{RQ3.} Does the verification pipeline reduce MRV cost per hectare per
+monitoring cycle relative to current practice in a comparable community project?
+
+\textbf{RQ4.} Does paying for verified reporting, rather than for survival,
+reduce misreporting of seedling mortality?
+
+\subsection{Dataset}
+
+We propose a corpus of approximately 1{,}000 geotagged plot photographs
+collected at Tudor Creek in Mombasa County and at Gazi Bay in Kwale County, the
+latter chosen because an established research baseline exists there. Images
+should be captured by community monitors on their own handsets, under the
+lighting and weather conditions that will obtain in deployment, rather than by
+researchers under favourable conditions; the domain gap reported
+in~\cite{zhou2026} is precisely the effect that a curated corpus would hide.
+Each image requires an independent expert label for species, condition and
+presence of disturbance, established by a trained botanist in the field at time
+of capture. Inter-rater agreement should be reported on a duplicated subset.
+
+\subsection{Metrics}
+
+\begin{itemize}
+\item \textbf{Corroboration agreement}: rate at which the model's species
+assessment agrees with the expert label, conditioned on the monitor's
+declaration being correct and separately on it being incorrect. The second case
+is the operationally important one, since it measures whether the system catches
+a mistaken declaration.
+\item \textbf{Disturbance recall and precision}, with recall privileged. We
+propose reporting the precision obtained at a recall of 0.90 for cutting
+detection, since a missed clearing event is a materially worse error than an
+unnecessary human review.
+\item \textbf{Abstention rate and abstention quality}: the fraction of
+submissions routed to human review, and the error rate within the accepted set
+compared with the error rate within the abstained set. An abstention mechanism
+that does not concentrate errors in the abstained set is not working.
+\item \textbf{Fabrication rate}: frequency of species labels outside the closed
+set, or of asserted features absent from the image, measured against expert
+labels. This is a direct replication target for the 5.9 to 9.6 percent range
+reported in~\cite{zhou2026} under a constrained label set.
+\item \textbf{Calibration}: expected calibration error of the reported
+confidence against observed correctness, since the confidence threshold is the
+mechanism that gates payment and must be meaningful.
+\end{itemize}
+
+\subsection{Baselines}
+
+Four comparators are required for the result to be interpretable: the
+monitor's unaided declaration; a domain-trained specialist classifier of the
+kind shown to outperform general VLMs in~\cite{zhou2026}; an expert field
+officer, representing current practice and the cost baseline; and a trivial
+majority-class predictor, to establish the floor.
+
+\subsection{Cost Study}
+
+RQ3 requires an economic measurement, not a software benchmark. We propose
+recording, for one monitoring cycle at a comparable community project, the
+labour hours, travel, expert time and administrative overhead currently consumed
+per hectare, and comparing against the same quantities under the proposed
+workflow, inclusive of human review time generated by abstention and of model
+inference cost. Abstention is a cost transfer, not a cost elimination, and an
+evaluation that omits review labour would overstate the saving.
+
+\subsection{Incentive Experiment}
+
+RQ4 requires a field experiment with human participants and therefore ethical
+review, informed consent in the participants' language, and the agreement of the
+relevant community forest association. We propose assigning monitoring groups to
+payment-for-reporting or payment-for-survival conditions and comparing reported
+mortality against independently assessed mortality on a sample of plots. The
+prediction is that reported mortality under payment-for-survival is
+significantly lower than independently assessed mortality, and that the gap is
+smaller under payment-for-reporting.
+
+\subsection{Threats to Validity}
+
+\textbf{Construct validity.} Expert labels are treated as ground truth, but
+species determination from a photograph is genuinely difficult for young
+individuals of morphologically similar taxa, and an expert working from the same
+image rather than from the plant in hand inherits the same limitation. We
+require labels established in the field at time of capture, and inter-rater
+agreement reported, so that the ceiling imposed by label noise is visible rather
+than assumed away.
+
+\textbf{Internal validity.} Monitors who know their submissions are being
+evaluated may photograph more carefully than they would in routine operation,
+inflating measured legibility. A period of routine operation before the
+evaluation window, and sampling of submissions without prior notice, mitigate
+this only partially.
+
+\textbf{External validity.} Two sites on one coastline, with one dominant set of
+species and one set of lighting and tidal conditions, will not characterise
+performance elsewhere. Results should be read as specific to Kenyan coastal
+mangrove and not generalised to other mangrove regions, still less to other
+ecosystems.
+
+\textbf{Temporal validity.} Model behaviour changes as providers update
+endpoints. Any reported figure is a measurement of one model version at one
+point in time, and the evaluation should record the exact model identifier and
+be treated as requiring periodic repetition rather than as a durable property of
+the system.
+
+\textbf{Conflict of interest.} The evaluation of a cost-reduction claim is being
+proposed by the party who benefits from that claim being true. Cost measurement
+in particular should be performed or audited by the comparison project rather
+than by the system's author.
+
+\subsection{Falsification Criteria}
+
+The central claim of this paper fails if any of the following hold. If
+corroboration agreement on genuinely mistaken declarations is no better than
+chance, the verification layer adds no value over self-report. If the abstention
+rate required to reach an acceptable error rate exceeds the fraction of
+submissions a human reviewer could process at the target scale, the system does
+not reduce expert dependence and the cost argument collapses. If the measured
+MRV cost per hectare is not materially below current practice once review labour
+is included, the premise of the work is wrong. We commit to reporting these
+outcomes if they obtain.
+
+\section{Discussion}
+
+\subsection{What This System Does Not Do}
+
+BlueProof is not a carbon registry and does not issue credits. It produces
+evidence intended for use within an existing accredited methodology. Any
+sequestration figure derived from its outputs depends on a per-hectare rate that
+must come from an approved methodology or from site-specific measurement of the
+kind reported in~\cite{kairo2021}, not from the system itself. The reference
+implementation carries such a rate as an explicitly labelled configuration
+assumption for demonstration purposes, and we would regard quoting a figure
+derived from it as a misrepresentation.
+
+\subsection{Equity and Benefit Sharing}
+\label{sec:equity}
+
+There is a legitimate criticism of blue carbon finance that a limited share of
+revenue reaches the people performing the physical work. A system that reduces
+verification cost does not address this, and could plausibly worsen it: cheaper
+verification expands the supply of credits without altering how the proceeds are
+divided, and the efficiency gain may simply accrue to intermediaries.
+
+We regard this as a design obligation rather than an externality. Two mitigations
+are built into the proposal. Recording the amount paid to a named monitor in the
+same ledger entry as the ecological facts makes the labour share of each verified
+record computable rather than obscured, and publishing the payment per verified
+event as a project parameter makes it contestable. Neither guarantees equitable
+distribution. Both make inequitable distribution visible, which is a
+precondition for contesting it. We would encourage any deployment to publish the
+ratio of monitor payments to total project revenue as a standing metric.
+
+\subsection{Where the Cost Actually Moves}
+
+It is worth being precise about the mechanism by which this design could reduce
+cost, because a vague claim of automation invites the reasonable objection
+that machine assessment simply relocates work.
+
+Current practice concentrates cost in expert field presence: travel to a site,
+time on the ground, and the administrative overhead of turning field notes into
+an auditable narrative. The proposed workflow leaves observation with people who
+are already present, which removes travel almost entirely for routine cycles,
+and replaces a portion of expert attestation with machine corroboration plus
+human review of the residual. Report preparation, which~\cite{vanderheyden2026}
+associates with substantial administrative burden and where digitalisation is
+shown to yield measurable savings, is largely automated because the quantitative
+content is already structured.
+
+Three components of cost do not reduce and must appear in any honest accounting.
+Human review of abstained submissions is real labour, and its volume is set by
+the abstention rate, which is in turn set by how conservative the confidence
+threshold must be to hold the error rate acceptable. Model inference has a
+per-submission cost. And initial training of monitors, together with periodic
+re-training, is unavoidable and is not a one-off. The cost study specified in
+Section~\ref{sec:eval} is constructed to capture all three, because an
+evaluation that counted only the removed travel would produce a flattering and
+false number.
+
+\subsection{Governance and Tenure}
+
+Mangroves in Kenya are gazetted government forest reserve. Any field deployment
+requires the participation of the Kenya Forest Service and a community forest
+association, and a system that generates a record of who did what where in a
+contested resource carries governance implications that software design cannot
+resolve. Photographs taken in and around a settlement are personal data in
+practice regardless of their classification in law, and retention, access and
+consent should be settled before collection begins, not after.
+
+\section{Limitations}
+
+We summarise the limitations stated throughout. The verification premise is
+untested on real mangrove photography, and the published evidence gives
+substantial reason for caution~\cite{zhou2026}. Satellite corroboration is
+implemented against a synthetic index series; live ingestion is specified but
+not built, and radar fallback for cloud is future work. The satellite layer
+cannot observe plot-level survival at 10~m resolution, and 70.3 percent of the
+carbon at stake in this ecosystem is in soil that no optical sensor
+observes~\cite{kairo2021}. The cost thesis is argued from the general MRV
+literature~\cite{vanderheyden2026} rather than measured in this setting. The
+incentive argument is theoretical pending the experiment proposed above. And the
+system has been exercised only against synthetic inputs, so no claim about its
+behaviour under real load or real imagery is made here.
+
+\section{Conclusion}
+
+Kenya's mangroves store carbon at exceptional density, are being lost at a
+measurable rate, and are protected in places by community institutions that
+work but do not scale. We have argued that verification cost is the plausible
+binding constraint, and presented a system design that attacks it while
+respecting two constraints the evidence imposes: that satellite data cannot see
+what people claim it sees, and that general-purpose vision-language models are
+unreliable taxonomic authorities on field imagery. The resulting design confines
+the model to bounded judgements, requires it to abstain, keeps monitor claims
+and model assessments separately recorded, and pays for honest reporting rather
+than for favourable outcomes.
+
+Whether this reduces MRV cost enough to matter is an empirical question that
+this paper does not answer. We have specified how to answer it, and what answer
+would tell us the idea is wrong.
+
+\section*{Acknowledgements}
+
+This work is at design stage and has no institutional sponsor. No community
+forest association, research institute or government agency has endorsed it, and
+none should be understood to have done so. The author thanks the reviewers of
+earlier drafts.
+
+\begin{thebibliography}{9}
+\small
+
+\bibitem{kairo2021}
+J. Kairo, A. Mbatha, M. M. Murithi, and F. Mungai,
+``Total ecosystem carbon stocks of mangroves in Lamu, Kenya, and their potential
+contributions to the climate change agenda in the country,''
+\emph{Frontiers in Forests and Global Change}, vol. 4, 2021.
+doi:10.3389/ffgc.2021.709227
+
+\bibitem{zhou2026}
+W. Zhou, M. Siripuram, X. Yan, Z. Liu, and Y. Ding,
+``Can edge-deployable vision-language models identify species?''
+\emph{arXiv preprint} arXiv:2609.11916, 2026.
+
+\bibitem{vanderheyden2026}
+L. Vanderheyden, N. Gayot, and G. Van den Broeck,
+``What monitoring, reporting and verification (MRV) systems can reduce costs and
+enhance scalability of carbon farming?''
+\emph{Journal of Environmental Management}, vol. 401, 2026.
+
+\bibitem{planvivo}
+Plan Vivo Foundation,
+``Mikoko Pamoja, Kenya,'' project documentation.
+\url{https://www.planvivo.org/projects/mikoko-pamoja-kenya}
+
+\bibitem{s2monitoring}
+``Mangrove monitoring maps: tracking status, disturbance, and recovery
+trajectories from Sentinel-2 time series,''
+\emph{Science of Remote Sensing}, 2026.
+
+\bibitem{rsreview}
+``Mangrove mapping and monitoring using remote sensing techniques towards
+climate change resilience,''
+\emph{Scientific Reports}, vol. 14, 2024.
+doi:10.1038/s41598-024-57563-4
+
+\bibitem{unfccc2015}
+United Nations Framework Convention on Climate Change,
+``Connected Mangroves, Malaysia,'' Momentum for Change, ICT Solutions.
+\url{https://unfccc.int/climate-action/momentum-for-change/ict-solutions/connected-mangroves}
+
+\bibitem{ericsson2019}
+Ericsson,
+``IoT environmental monitoring for vital predictions: revitalizing mangrove
+forests,'' case study, 2019.
+\url{https://www.ericsson.com/en/cases/2019/revitalizing-mangrove-forests}
+
+\bibitem{matang}
+``Is Matang mangrove forest in Malaysia sustainably rejuvenating after more than
+a century of conservation and harvesting management?''
+\emph{PLOS ONE}, 2014. doi:10.1371/journal.pone.0105069
+
+\bibitem{leemalaysia}
+S. L. Lee, S. Y. Chee, M. Huxham, M. Jamilah, J. Choo, C. R. Kaur,
+A. A. Amir, J. L. S. Ooi, M. Rozaimi, H. Omar, S. Sharma, M. Moritz,
+and A. Y.-H. Then,
+``Blue carbon ecosystems in Malaysia: status, threats, and the way forward for
+research and policy,''
+\emph{Journal of Environment and Development}, 2025.
+doi:10.1177/10704965241284366
+
+\bibitem{kcaa}
+Kenya Civil Aviation Authority,
+``Unmanned aircraft systems: remote pilot licensing and operator certification,''
+regulatory guidance.
+\url{https://www.kcaa.or.ke/safety-security-oversight/unmanned-aircraft-systems}
+
+\bibitem{multiindex}
+``Integrating multi-index remote sensing and machine learning for mangrove
+dynamics assessment using Sentinel-2 imagery,''
+\emph{iScience}, 2026.
+
+\end{thebibliography}
+
+\end{document}

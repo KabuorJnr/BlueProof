@@ -1,0 +1,371 @@
+@layer reset, base, theme, components, utilities;
+
+@layer theme {
+  :root {
+    /* Dark greens carry all the meaning. Text sits on near opaque surfaces so
+       contrast survives direct sunlight, which is the real viewing condition. */
+    --ink: #083A2D;          /* primary text, ~13:1 on the page background */
+    --ink-soft: #3A6A5E;     /* secondary text, still AA at body size */
+    --brand: #0E5140;        /* dark green, brand and headings */
+    --accent: #19917A;       /* actions */
+    --accent-deep: #0C6E5A;
+    --warn: #983F15;
+
+    --page: #F4F9F7;
+    --glass: color-mix(in oklab, white 72%, transparent);
+    --glass-strong: color-mix(in oklab, white 88%, transparent);
+    --glass-edge: color-mix(in oklab, white 85%, var(--accent) 6%);
+
+    --radius: 18px;
+    --radius-sm: 12px;
+
+    /* Layered shadows read as soft depth rather than a single hard drop. */
+    --lift:
+      0 1px 2px color-mix(in oklab, var(--brand) 8%, transparent),
+      0 6px 16px color-mix(in oklab, var(--brand) 7%, transparent),
+      0 18px 40px color-mix(in oklab, var(--brand) 5%, transparent);
+    --lift-sm: 0 1px 2px color-mix(in oklab, var(--brand) 10%, transparent),
+               0 4px 12px color-mix(in oklab, var(--brand) 6%, transparent);
+  }
+}
+
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(body, h1, h2, h3, p, figure) { margin: 0; }
+  :where(button, input, select) { font: inherit; color: inherit; }
+  /* `:not([hidden])` matters: a bare `display: block` here is an author rule
+     and silently defeats the UA stylesheet's `[hidden] { display: none }`,
+     so hidden media would still render. */
+  :where(img, video):not([hidden]) { display: block; max-inline-size: 100%; }
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    min-block-size: 100dvh;
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.45;
+    overscroll-behavior-y: contain;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Colour fields behind the glass. Without something to refract, glass reads
+     as flat grey. Fixed so panels pick up different tints as the page scrolls. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(38rem 30rem at 12% -6%,
+        color-mix(in oklab, var(--accent) 26%, transparent), transparent 62%),
+      radial-gradient(32rem 26rem at 108% 14%,
+        color-mix(in oklab, #3FC0B0 24%, transparent), transparent 60%),
+      radial-gradient(34rem 32rem at 50% 118%,
+        color-mix(in oklab, var(--brand) 20%, transparent), transparent 62%);
+  }
+
+  :where(h1, h2, h3) { color: var(--brand); text-wrap: balance; line-height: 1.2; }
+  h2 { font-size: 1.45rem; letter-spacing: -0.015em; }
+  p { text-wrap: pretty; }
+
+  :where(a) { color: var(--accent-deep); }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-deep);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
+@layer components {
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius);
+    box-shadow: var(--lift);
+  }
+
+  /* Progressive enhancement: without backdrop-filter the panel simply becomes
+     more opaque, which keeps text legible rather than muddy. */
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .glass {
+      background: color-mix(in oklab, white 58%, transparent);
+      -webkit-backdrop-filter: blur(18px) saturate(165%);
+      backdrop-filter: blur(18px) saturate(165%);
+    }
+  }
+
+  .app { display: flex; flex-direction: column; min-block-size: 100dvh; }
+
+  /* Visible only on keyboard focus. It sits above the sticky topbar, which is
+     z-index 10, or it would appear behind the thing it lets you skip past. */
+  .skip {
+    position: absolute;
+    inset-block-start: -100%;
+    inset-inline-start: 12px;
+    z-index: 20;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--accent-deep);
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .skip:focus-visible { inset-block-start: calc(env(safe-area-inset-top) + 10px); }
+
+  /* main receives focus on every route change so the new view is announced.
+     That focus is programmatic, never a keyboard tab stop, so an outline on it
+     would be a ring the user did not ask for around the entire screen. */
+  main:focus { outline: none; }
+
+  /* Not dismissible, and deliberately not styled down into something ignorable.
+     It is the only thing standing between a convincing demo and a false belief
+     about what the system can do. */
+  .demobanner {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin: 0;
+    padding: 10px 16px;
+    font-size: 0.83rem;
+    line-height: 1.4;
+    color: var(--warn);
+    background: color-mix(in oklab, var(--warn) 9%, white);
+    border-block-end: 1px solid color-mix(in oklab, var(--warn) 22%, transparent);
+  }
+  .demobanner svg { flex: none; margin-block-start: 2px; }
+
+  .topbar {
+    position: sticky; inset-block-start: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+    background: var(--glass-strong);
+    border-block-end: 1px solid var(--glass-edge);
+  }
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .topbar {
+      background: color-mix(in oklab, white 66%, transparent);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
+      backdrop-filter: blur(16px) saturate(160%);
+    }
+  }
+  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand strong { font-size: 1.05rem; letter-spacing: 0.14em; color: var(--brand); }
+
+  main { flex: 1; padding: 18px 16px 104px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.74rem; font-weight: 600;
+    padding: 6px 11px; border-radius: 999px;
+    color: var(--accent-deep);
+    background: color-mix(in oklab, var(--accent) 12%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 24%, transparent);
+  }
+  .chip[data-tone="off"] {
+    color: var(--warn);
+    background: color-mix(in oklab, var(--warn) 10%, white);
+    border-color: color-mix(in oklab, var(--warn) 26%, transparent);
+  }
+
+  .card { padding: 18px; margin-block-end: 14px; }
+  .lede { color: var(--ink-soft); margin-block: 4px 16px; }
+
+  .btn {
+    inline-size: 100%;
+    min-block-size: 54px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    padding: 14px 18px;
+    font-size: 1rem; font-weight: 650;
+    border: 0; border-radius: 14px;
+    background: linear-gradient(to bottom in oklab, var(--accent), var(--accent-deep));
+    color: white;
+    box-shadow: var(--lift-sm);
+    cursor: pointer;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .btn:hover:not(:disabled) { filter: brightness(1.05); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  .btn[data-variant="ghost"] {
+    background: color-mix(in oklab, white 70%, transparent);
+    color: var(--brand);
+    border: 1px solid color-mix(in oklab, var(--brand) 22%, transparent);
+    box-shadow: none;
+  }
+
+  @media (pointer: coarse) {
+    .btn { min-block-size: 58px; }
+  }
+
+  label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--ink-soft); margin-block: 14px 6px; }
+  input {
+    inline-size: 100%;
+    padding: 13px 14px;
+    font-size: 16px;               /* 16px prevents iOS zoom on focus */
+    border-radius: var(--radius-sm);
+    border: 1px solid color-mix(in oklab, var(--brand) 18%, transparent);
+    background: color-mix(in oklab, white 86%, transparent);
+    color: var(--ink);
+  }
+
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .stat { padding: 15px; border-radius: var(--radius-sm); }
+  .stat b { display: block; font-size: 1.6rem; color: var(--brand); line-height: 1.15; }
+  .stat span { font-size: 0.76rem; color: var(--ink-soft); }
+  .stat .ico { color: var(--accent); margin-block-end: 6px; }
+
+  .price { font-size: 2.6rem; font-weight: 750; color: var(--brand); letter-spacing: -0.03em; }
+  .price small { font-size: 0.95rem; font-weight: 600; color: var(--ink-soft); }
+
+  .media {
+    inline-size: 100%; aspect-ratio: 4 / 3; object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklab, white 55%, transparent);
+    border: 1px solid var(--glass-edge);
+  }
+
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+  .item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 13px; }
+  .item:not(:last-child) { border-block-end: 1px solid color-mix(in oklab, var(--brand) 10%, transparent); }
+  .item .title { font-weight: 620; color: var(--brand); }
+  .item .meta { font-size: 0.82rem; color: var(--ink-soft); }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.72rem; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+    color: var(--ink-soft);
+    background: color-mix(in oklab, white 70%, transparent);
+    border: 1px solid color-mix(in oklab, var(--brand) 14%, transparent);
+  }
+  .tag[data-tone="ok"] {
+    color: var(--accent-deep);
+    background: color-mix(in oklab, var(--accent) 12%, white);
+    border-color: color-mix(in oklab, var(--accent) 26%, transparent);
+  }
+  .tag[data-tone="wait"] {
+    color: var(--warn);
+    background: color-mix(in oklab, var(--warn) 10%, white);
+    border-color: color-mix(in oklab, var(--warn) 24%, transparent);
+  }
+
+  .note {
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 0.85rem; color: var(--ink-soft);
+    padding: 12px 14px; border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--accent) 8%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 18%, transparent);
+    margin-block-end: 14px;
+  }
+
+  .tabbar {
+    position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 20;
+    display: flex;
+    padding-block-end: env(safe-area-inset-bottom);
+    background: var(--glass-strong);
+    border-block-start: 1px solid var(--glass-edge);
+  }
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .tabbar {
+      background: color-mix(in oklab, white 68%, transparent);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      backdrop-filter: blur(18px) saturate(160%);
+    }
+  }
+  .tab {
+    flex: 1; min-block-size: 56px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    border: 0; background: none; cursor: pointer;
+    font-size: 0.66rem; font-weight: 600;
+    color: var(--ink-soft);
+    padding-block: 8px;
+  }
+  .tab[aria-current="page"] { color: var(--accent-deep); }
+  .tab[aria-current="page"] .dot {
+    inline-size: 4px; block-size: 4px; border-radius: 50%;
+    background: var(--accent-deep);
+  }
+  .dot { inline-size: 4px; block-size: 4px; }
+
+  .toast {
+    position: fixed; inset-inline: 16px; inset-block-end: 88px; z-index: 40;
+    display: flex; align-items: center; gap: 9px; justify-content: center;
+    padding: 13px 16px; border-radius: 14px;
+    font-weight: 620;
+    color: white;
+    background: linear-gradient(to bottom in oklab, var(--accent), var(--accent-deep));
+    box-shadow: var(--lift);
+  }
+  .toast[data-tone="err"] {
+    background: linear-gradient(to bottom in oklab, #B4531F, var(--warn));
+  }
+}
+
+@layer utilities {
+  .sr-only {
+    position: absolute; inline-size: 1px; block-size: 1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .stack > * + * { margin-block-start: 10px; }
+  .muted { color: var(--ink-soft); font-size: 0.86rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* BlueProof only: the guided capture protocol. */
+@layer components {
+  .steps { display: flex; gap: 6px; margin-block-end: 14px; }
+  .step {
+    flex: 1; block-size: 5px; border-radius: 999px;
+    background: color-mix(in oklab, var(--brand) 14%, transparent);
+  }
+  .step[data-state="done"] { background: var(--accent); }
+  .step[data-state="now"] { background: color-mix(in oklab, var(--accent) 55%, white); }
+
+  .shotname { font-size: 0.78rem; font-weight: 700; letter-spacing: .06em;
+              text-transform: uppercase; color: var(--accent-deep); }
+
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-block-start: 12px; }
+  .thumbs img {
+    inline-size: 56px; block-size: 56px; object-fit: cover;
+    border-radius: 10px; border: 1px solid var(--glass-edge);
+  }
+
+  .verdictline { display: flex; align-items: center; gap: 9px; padding-block: 7px; }
+  .verdictline .k { color: var(--ink-soft); font-size: 0.86rem; min-inline-size: 7.5rem; }
+  .verdictline .v { font-weight: 640; color: var(--brand); }
+
+  .meter { block-size: 7px; border-radius: 999px; overflow: hidden;
+           background: color-mix(in oklab, var(--brand) 12%, transparent); }
+  .meter > i { display: block; block-size: 100%; background: var(--accent); }
+}
+
+@layer components {
+  /* Checkbox rows. The base input rule stretches every input to full width,
+     which is right for text and wrong for a box you tick. */
+  label.check {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.9rem; font-weight: 560; color: var(--ink);
+  }
+  label.check input { inline-size: 22px; block-size: 22px; padding: 0; flex: none; accent-color: var(--accent); }
+
+  .formerror {
+    color: var(--warn); font-size: 0.86rem; font-weight: 600;
+    margin-block: 12px 0;
+  }
+
+  .reasons { margin: 6px 0 0; padding-inline-start: 1.1em; font-size: 0.84rem; color: var(--ink-soft); }
+  .reasons li + li { margin-block-start: 4px; }
+
+  .whoami { font-size: 0.76rem; color: var(--ink-soft); }
+}
