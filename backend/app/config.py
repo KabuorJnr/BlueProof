@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     # blind: the model is NOT told the declaration; it picks from the nine
     #   and code compares (prompt v4). Measure before switching.
     verifier_mode: str = "corroborate"  # corroborate | blind
+    # Path to a species_probe.npz from tools/classifier.py. When set, a BioCLIP
+    # classifier answers the species question instead of the language model.
+    # Needs backend/requirements-ml.txt installed. Blank = off.
+    species_classifier_path: str | None = None
+    # Only auto-accept species that met the accept bar on validation (safer,
+    # more human review). Off: auto-accept any species the classifier matches.
+    species_trust_list: bool = True
     verifier_sample_temperature: float = 0.7
     # Escalate a submission that arrives without a plot marker photograph.
     require_marker: bool = False

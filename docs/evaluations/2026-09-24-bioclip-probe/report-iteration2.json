@@ -1,0 +1,226 @@
+{
+  "model": "hf-hub:imageomics/bioclip",
+  "classes": [
+    "Rhizophora mucronata",
+    "Avicennia marina",
+    "Ceriops tagal",
+    "Sonneratia alba",
+    "Bruguiera gymnorrhiza",
+    "Xylocarpus granatum",
+    "Xylocarpus moluccensis",
+    "Lumnitzera racemosa",
+    "Heritiera littoralis"
+  ],
+  "bar": {
+    "catch": 0.8,
+    "accept": 0.85,
+    "review": 0.3
+  },
+  "splits": {
+    "train": 1802,
+    "val": 415,
+    "test": 533
+  },
+  "zero_shot_test_top1": 0.675,
+  "probe_C": 30,
+  "probe_val_top1": 0.867,
+  "probe_test_top1": 0.871,
+  "thresholds": {
+    "yes": 0.2,
+    "no": 0.2
+  },
+  "val": {
+    "accept": 0.8674698795180723,
+    "false_dispute": 0.13253012048192772,
+    "catch": 0.9759036144578314,
+    "missed": 0.024096385542168676,
+    "review": 0.0,
+    "n_right": 415,
+    "n_wrong": 415
+  },
+  "test": {
+    "accept": 0.8705440900562852,
+    "false_dispute": 0.1294559099437148,
+    "catch": 0.9868667917448405,
+    "missed": 0.013133208255159476,
+    "review": 0.0,
+    "n_right": 533,
+    "n_wrong": 533
+  },
+  "val_passes_bar": true,
+  "test_passes_bar": true,
+  "val_per_species": {
+    "Rhizophora mucronata": {
+      "n": 90,
+      "accept": 0.833
+    },
+    "Avicennia marina": {
+      "n": 91,
+      "accept": 0.945
+    },
+    "Ceriops tagal": {
+      "n": 4,
+      "accept": 0.25
+    },
+    "Sonneratia alba": {
+      "n": 33,
+      "accept": 0.788
+    },
+    "Bruguiera gymnorrhiza": {
+      "n": 69,
+      "accept": 0.87
+    },
+    "Xylocarpus granatum": {
+      "n": 15,
+      "accept": 0.8
+    },
+    "Xylocarpus moluccensis": {
+      "n": 6,
+      "accept": 0.5
+    },
+    "Lumnitzera racemosa": {
+      "n": 86,
+      "accept": 0.895
+    },
+    "Heritiera littoralis": {
+      "n": 21,
+      "accept": 0.952
+    }
+  },
+  "trusted_species": [
+    "Avicennia marina",
+    "Bruguiera gymnorrhiza",
+    "Heritiera littoralis",
+    "Lumnitzera racemosa"
+  ],
+  "test_with_trust": {
+    "accept": 0.5703564727954972,
+    "false_dispute": 0.1294559099437148,
+    "catch": 0.9868667917448405,
+    "missed": 0.00375234521575985,
+    "review": 0.15478424015009382,
+    "n_right": 533,
+    "n_wrong": 533
+  },
+  "test_east_africa_with_trust": {
+    "n": 45,
+    "accept": 0.3111111111111111,
+    "false_dispute": 0.3111111111111111,
+    "catch": 0.9555555555555556,
+    "missed": 0.022222222222222223,
+    "review": 0.2,
+    "n_right": 45,
+    "n_wrong": 45
+  },
+  "test_per_species": {
+    "Rhizophora mucronata": {
+      "n": 110,
+      "top1": 0.882,
+      "accept": 0.882,
+      "false_dispute": 0.118,
+      "catch": 0.964,
+      "missed": 0.036,
+      "review": 0.0,
+      "n_right": 110,
+      "n_wrong": 110
+    },
+    "Avicennia marina": {
+      "n": 111,
+      "top1": 0.928,
+      "accept": 0.928,
+      "false_dispute": 0.072,
+      "catch": 1.0,
+      "missed": 0.0,
+      "review": 0.0,
+      "n_right": 111,
+      "n_wrong": 111
+    },
+    "Ceriops tagal": {
+      "n": 8,
+      "top1": 0.375,
+      "accept": 0.375,
+      "false_dispute": 0.625,
+      "catch": 0.875,
+      "missed": 0.125,
+      "review": 0.0,
+      "n_right": 8,
+      "n_wrong": 8
+    },
+    "Sonneratia alba": {
+      "n": 46,
+      "top1": 0.761,
+      "accept": 0.761,
+      "false_dispute": 0.239,
+      "catch": 0.935,
+      "missed": 0.065,
+      "review": 0.0,
+      "n_right": 46,
+      "n_wrong": 46
+    },
+    "Bruguiera gymnorrhiza": {
+      "n": 94,
+      "top1": 0.83,
+      "accept": 0.83,
+      "false_dispute": 0.17,
+      "catch": 0.989,
+      "missed": 0.011,
+      "review": 0.0,
+      "n_right": 94,
+      "n_wrong": 94
+    },
+    "Xylocarpus granatum": {
+      "n": 22,
+      "top1": 1.0,
+      "accept": 1.0,
+      "false_dispute": 0.0,
+      "catch": 1.0,
+      "missed": 0.0,
+      "review": 0.0,
+      "n_right": 22,
+      "n_wrong": 22
+    },
+    "Xylocarpus moluccensis": {
+      "n": 8,
+      "top1": 0.375,
+      "accept": 0.375,
+      "false_dispute": 0.625,
+      "catch": 1.0,
+      "missed": 0.0,
+      "review": 0.0,
+      "n_right": 8,
+      "n_wrong": 8
+    },
+    "Lumnitzera racemosa": {
+      "n": 111,
+      "top1": 0.919,
+      "accept": 0.919,
+      "false_dispute": 0.081,
+      "catch": 1.0,
+      "missed": 0.0,
+      "review": 0.0,
+      "n_right": 111,
+      "n_wrong": 111
+    },
+    "Heritiera littoralis": {
+      "n": 23,
+      "top1": 0.913,
+      "accept": 0.913,
+      "false_dispute": 0.087,
+      "catch": 1.0,
+      "missed": 0.0,
+      "review": 0.0,
+      "n_right": 23,
+      "n_wrong": 23
+    }
+  },
+  "test_east_africa": {
+    "n": 45,
+    "accept": 0.6888888888888889,
+    "false_dispute": 0.3111111111111111,
+    "catch": 0.9555555555555556,
+    "missed": 0.044444444444444446,
+    "review": 0.0,
+    "n_right": 45,
+    "n_wrong": 45
+  }
+}

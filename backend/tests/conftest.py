@@ -21,7 +21,8 @@ os.environ["DEMO_SEED"] = "true"
 os.environ["ENVIRONMENT"] = "dev"
 # Tests never reach a real service, whatever backend/.env holds: environment
 # variables take precedence over the file, and blanks mean mock mode.
-for _name in ("LLAMA_API_URL", "LLAMA_API_KEY", "COPERNICUS_CLIENT_ID", "COPERNICUS_CLIENT_SECRET"):
+for _name in ("LLAMA_API_URL", "LLAMA_API_KEY", "COPERNICUS_CLIENT_ID", "COPERNICUS_CLIENT_SECRET",
+              "SPECIES_CLASSIFIER_PATH"):
     os.environ[_name] = ""
 os.environ["MPESA_MODE"] = "mock"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

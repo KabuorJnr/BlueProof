@@ -1,0 +1,7 @@
+# Species classifier tooling (tools/classifier.py). Not needed by the API server
+# unless SPECIES_CLASSIFIER is enabled.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+open_clip_torch
+scikit-learn

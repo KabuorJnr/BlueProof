@@ -47,53 +47,98 @@ def in_east_africa(lat, lon) -> bool:
             and EAST_AFRICA["swlng"] <= lon <= EAST_AFRICA["nelng"])
 
 
-def fetch(client: httpx.Client, species: str, limit: int) -> list[dict]:
-    rows, page = [], 1
-    while len(rows) < limit:
-        r = client.get(API, params={
-            "taxon_name": species, "quality_grade": "research", "photo_license": LICENCES,
-            "per_page": 100, "page": page, "order_by": "id", "order": "asc",
+def _page(client: httpx.Client, species: str, page: int, extra: dict) -> list[dict]:
+    r = client.get(API, params={
+        "taxon_name": species, "quality_grade": "research", "photo_license": LICENCES,
+        "per_page": 100, "page": page, "order_by": "id", "order": "asc", **extra,
+    })
+    r.raise_for_status()
+    time.sleep(1.1)  # iNaturalist asks for about one request per second
+    return r.json().get("results", [])
+
+
+def _rows(species: str, obs: dict) -> list[dict]:
+    lat = lon = None
+    if obs.get("location"):
+        lat, lon = (float(x) for x in obs["location"].split(","))
+    out = []
+    for p in obs.get("photos", [])[:2]:  # at most 2 photos per observation
+        if (p.get("license_code") or "") not in LICENCES.split(","):
+            continue
+        out.append({
+            "species": species,
+            "observation_id": obs["id"],
+            "photo_id": p["id"],
+            "url": p["url"].replace("square", "medium"),  # ~500 px
+            "licence": p["license_code"],
+            "attribution": p.get("attribution", ""),
+            "lat": lat, "lon": lon,
+            "east_africa": int(in_east_africa(lat, lon)),
         })
-        r.raise_for_status()
-        results = r.json().get("results", [])
-        if not results:
-            break
-        for obs in results:
-            lat = lon = None
-            if obs.get("location"):
-                lat, lon = (float(x) for x in obs["location"].split(","))
-            for p in obs.get("photos", [])[:2]:  # at most 2 photos per observation
-                if (p.get("license_code") or "") not in LICENCES.split(","):
+    return out
+
+
+def fetch(client: httpx.Client, species: str, limit: int) -> list[dict]:
+    """East African observations first (all of them), then the rest up to `limit`.
+
+    The East African ones are few and are the test set, so they must never be
+    lost to the cap.
+    """
+    rows: list[dict] = []
+    seen: set[int] = set()
+    for extra in (EAST_AFRICA, {}):
+        page = 1
+        while True:
+            if extra == {} and len(rows) >= limit:
+                break
+            results = _page(client, species, page, extra)
+            if not results:
+                break
+            for obs in results:
+                if obs["id"] in seen:
                     continue
-                rows.append({
-                    "species": species,
-                    "observation_id": obs["id"],
-                    "photo_id": p["id"],
-                    "url": p["url"].replace("square", "medium"),  # ~500 px
-                    "licence": p["license_code"],
-                    "attribution": p.get("attribution", ""),
-                    "lat": lat, "lon": lon,
-                    "east_africa": int(in_east_africa(lat, lon)),
-                })
-        page += 1
-        time.sleep(1.1)  # iNaturalist asks for about one request per second
-    return rows[:limit]
+                seen.add(obs["id"])
+                rows += _rows(species, obs)
+            page += 1
+    ea = [r for r in rows if r["east_africa"]]
+    rest = [r for r in rows if not r["east_africa"]]
+    return ea + rest[: max(0, limit - len(ea))]
 
 
-def split(rows: list[dict], seed: int = 7) -> None:
-    """Assign train/val/test by observation. East African observations go to test."""
-    obs = sorted({r["observation_id"] for r in rows})
-    ea = {r["observation_id"] for r in rows if r["east_africa"]}
-    rest = [o for o in obs if o not in ea]
-    random.Random(seed).shuffle(rest)
-    n = len(rest)
-    # Test gets East Africa plus enough elsewhere to reach ~20%; val ~15%.
-    need_test = max(0, round(0.20 * len(obs)) - len(ea))
-    test = ea | set(rest[:need_test])
-    val = set(rest[need_test:need_test + round(0.15 * n)])
+def split(rows: list[dict], seed: int = 7, ea_to_val: float = 0.5) -> None:
+    """Assign train/val/test by observation, per species.
+
+    East African observations never go to train. `ea_to_val` of them go to
+    val, so decision thresholds are tuned on Kenyan-type imagery; the rest are
+    test. (Iteration 1 put them all in test: val never saw the region, and the
+    thresholds it chose did not transfer.)
+
+    Stratified so that a rare species (a dozen observations) still gets at
+    least one test and one validation observation when it can spare them.
+    """
+    rnd = random.Random(seed)
+    assign: dict[int, str] = {}
+    for sp in sorted({r["species"] for r in rows}):
+        obs = sorted({r["observation_id"] for r in rows if r["species"] == sp})
+        ea = [o for o in obs if any(r["east_africa"] for r in rows if r["observation_id"] == o)]
+        rnd.shuffle(ea)
+        ea_val = ea[: round(ea_to_val * len(ea))]
+        ea_test = ea[len(ea_val):]
+        rest = [o for o in obs if o not in ea]
+        rnd.shuffle(rest)
+        n = len(obs)
+        n_test = max(len(ea_test), round(0.20 * n), 1 if n >= 3 else 0)
+        n_val = max(len(ea_val), round(0.15 * n), 1 if n >= 4 else 0)
+        extra_test = max(0, n_test - len(ea_test))
+        extra_val = max(0, n_val - len(ea_val))
+        for o in ea_test + rest[:extra_test]:
+            assign[o] = "test"
+        for o in ea_val + rest[extra_test:extra_test + extra_val]:
+            assign[o] = "val"
+        for o in rest[extra_test + extra_val:]:
+            assign[o] = "train"
     for r in rows:
-        o = r["observation_id"]
-        r["split"] = "test" if o in test else "val" if o in val else "train"
+        r["split"] = assign[r["observation_id"]]
 
 
 def main() -> int:

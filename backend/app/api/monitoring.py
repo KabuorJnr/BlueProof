@@ -8,6 +8,7 @@ is actually purchasing.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 
@@ -26,7 +27,7 @@ from ..models import (
     VerificationStatus,
 )
 from ..schemas import Verdict
-from ..services import auth, gate, llama_vision, payouts, photos
+from ..services import auth, gate, llama_vision, payouts, photos, species_classifier
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
@@ -189,6 +190,25 @@ async def submit_photo(
                 health="unclear", evidence_of_cutting=False, pest_damage=False, confidence=0.0,
                 reasoning=f"Verifier failed: {exc}",
             )
+
+    # The specialist classifier, when configured, answers the species question
+    # in place of the vision-language model. Its failure abstains, never crashes.
+    if photo is not None and species_classifier.is_enabled():
+        try:
+            sc = await asyncio.to_thread(species_classifier.check, photo.data, declared)
+            verdict = verdict.model_copy(update={
+                "species_consistent": sc["consistent"],
+                "detected_species": sc["detected"],
+                "source": f"{verdict.source}+{sc['source']}",
+                "reasoning": f"{verdict.reasoning} Species classifier: {sc['detected']} "
+                             f"({sc['probability']:.0%}), declared {declared}: {sc['consistent']}.",
+            })
+        except species_classifier.ClassifierError as exc:
+            verdict = verdict.model_copy(update={
+                "species_consistent": "unclear",
+                "detected_species": "unclear",
+                "reasoning": f"{verdict.reasoning} Species classifier failed: {exc}",
+            })
 
     marker_photo = photos.inspect(await marker.read()) if marker is not None else None
     marker_read: dict | None = None

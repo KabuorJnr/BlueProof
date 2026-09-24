@@ -61,7 +61,7 @@ docker compose up --build
 cd backend
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt -r requirements-dev.txt
-pytest                                                 # 45 tests
+pytest                                                 # 50 tests
 uvicorn app.main:app --reload
 ```
 

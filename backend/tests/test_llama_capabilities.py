@@ -171,3 +171,42 @@ def test_blind_mode_match_is_decided_in_code(client, amina, live, monkeypatch):
                  "species_evidence": "stilt roots", "seedlings": 9, "confidence": 0.7})
     ev = submit(client, amina, photo(71), client_ref="b-2").json()["event"]
     assert ev["species_consistent"] == "yes" and ev["status"] == "verified"
+
+
+# ---- specialist species classifier ------------------------------------------------
+
+
+def test_classifier_overrides_model_species_answer(client, amina, live, monkeypatch):
+    from app.services import species_classifier
+    monkeypatch.setattr(species_classifier, "is_enabled", lambda: True)
+    monkeypatch.setattr(species_classifier, "check", lambda data, declared: {
+        "consistent": "no", "detected": "Avicennia marina", "probability": 0.91, "source": "bioclip-probe@test"})
+    live(verify=GOOD)  # the language model says "yes", as it always did
+    ev = submit(client, amina, photo(80), client_ref="sc-1").json()["event"]
+    assert ev["species_consistent"] == "no" and ev["detected_species"] == "Avicennia marina"
+    assert ev["status"] == "needs_human"
+    assert ev["verification_source"].endswith("+bioclip-probe@test")
+
+
+def test_classifier_failure_abstains(client, amina, live, monkeypatch):
+    from app.services import species_classifier
+
+    def boom(data, declared):
+        raise species_classifier.ClassifierError("weights missing")
+
+    monkeypatch.setattr(species_classifier, "is_enabled", lambda: True)
+    monkeypatch.setattr(species_classifier, "check", boom)
+    live(verify=GOOD)
+    ev = submit(client, amina, photo(81), client_ref="sc-2").json()["event"]
+    assert ev["species_consistent"] == "unclear" and ev["status"] == "needs_human"
+    assert "Species classifier failed" in ev["reasoning"]
+
+
+def test_probe_trust_list_and_thresholds_load(monkeypatch, tmp_path):
+    """The committed probe carries the val-chosen trust list and thresholds."""
+    import numpy as np
+    from pathlib import Path
+    z = np.load(Path(__file__).resolve().parents[1] / "app/models_data/species_probe.npz", allow_pickle=False)
+    assert set(z.files) >= {"coef", "intercept", "classes", "t_yes", "t_no", "trusted"}
+    assert z["coef"].shape[0] == len(z["classes"]) == 9
+    assert set(str(c) for c in z["trusted"]) <= set(str(c) for c in z["classes"])
