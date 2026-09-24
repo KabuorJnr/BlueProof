@@ -60,7 +60,9 @@ from app.config import settings  # noqa: E402
 from app.services.gate import marker_mismatch  # noqa: E402
 from app.services.llama_vision import (  # noqa: E402
     KENYAN_MANGROVE_SPECIES,
+    BLIND_PROMPT_VERSION,
     PROMPT_VERSION,
+    VERIFY_MAX_TOKENS,
     VerifierError,
     _extract_json,
     aggregate,
@@ -119,7 +121,8 @@ def chat(client: httpx.Client, url: str, key: str, model: str, messages: list,
     return None
 
 
-def ask(client, url, path: Path, declared: str, model: str, key: str, samples: int, temperature: float):
+def ask(client, url, path: Path, declared: str, model: str, key: str, samples: int, temperature: float,
+        mode: str = "corroborate"):
     """Run the deployed verifier: `samples` calls, aggregated the deployed way.
 
     Returns (raw replies, verdict). raw is None if every call failed, and
@@ -127,16 +130,17 @@ def ask(client, url, path: Path, declared: str, model: str, key: str, samples: i
     """
     data = path.read_bytes()
     mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
-    messages = build_messages(data, declared, mime)
+    messages = build_messages(data, declared, mime, mode)
+    version = BLIND_PROMPT_VERSION if mode == "blind" else PROMPT_VERSION
     temp = 0.0 if samples == 1 else temperature
     raws, verdicts = [], []
     for _ in range(samples):
-        content = chat(client, url, key, model, messages, temp)
+        content = chat(client, url, key, model, messages, temp, VERIFY_MAX_TOKENS)
         if content is None:
             continue
         try:
             raws.append(_extract_json(content))
-            verdicts.append(parse_reply(content, declared, f"{model}@{PROMPT_VERSION}"))
+            verdicts.append(parse_reply(content, declared, f"{model}@{version}", mode))
         except VerifierError:
             # A model that cannot return the requested JSON is itself a finding.
             raws.append({"_unparseable": True})
@@ -145,7 +149,7 @@ def ask(client, url, path: Path, declared: str, model: str, key: str, samples: i
     # The deployed rule: a majority of samples must answer.
     if not verdicts or (samples > 1 and len(verdicts) * 2 <= samples):
         return [{"_unparseable": True}], None
-    return raws, aggregate(verdicts, f"{model}@{PROMPT_VERSION}x{samples}")
+    return raws, aggregate(verdicts, f"{model}@{version}x{samples}")
 
 
 def flag(value):
@@ -175,6 +179,8 @@ def main() -> int:
                     help="fraction of rows given a deliberately wrong declared species")
     ap.add_argument("--samples", type=int, default=settings.verifier_samples,
                     help="verifier calls per photograph, aggregated as deployed (default: the deployed value)")
+    ap.add_argument("--mode", choices=["corroborate", "blind"], default=settings.verifier_mode,
+                    help="corroborate: the model is told the declaration (v3); blind: it is not (v4)")
     ap.add_argument("--from-csv", type=Path, default=None,
                     help="recompute the report from a saved results CSV; makes no model calls")
     args = ap.parse_args()
@@ -208,8 +214,8 @@ def main() -> int:
             declared, declared_ok = declared_for(t, args.mistake_rate)
             print(f"[{i}/{len(truth)}] {t['filename']}  declared={declared}", file=sys.stderr)
             raws, v = ask(client, args.api_url, path, declared, args.model, key,
-                          args.samples, settings.verifier_sample_temperature)
-            offered_all = [norm(r.get("species_if_different")) for r in (raws or [])]
+                          args.samples, settings.verifier_sample_temperature, args.mode)
+            offered_all = [norm(r.get("species_if_different") or r.get("species")) for r in (raws or [])]
             offered = next((o for o in offered_all if o), "")
             fabricated = any(o and o not in species_set | {"unclear", "none", "null"} for o in offered_all)
 
@@ -261,6 +267,8 @@ def main() -> int:
                 "unparseable": int(v is None and raw is not None),
                 "failed": int(raw is None),
                 "reasoning": v.reasoning if v else "",
+                "detected_species": v.detected_species if v else "",
+                "subject": "|".join(sorted({str(r.get("subject", "")) for r in (raws or []) if r.get("subject")})),
             })
 
     if not rows:
@@ -295,7 +303,7 @@ def report(rows: list[dict], args) -> int:
     usable = [r for r in rows if not r["failed"] and not r["unparseable"]]
     n = len(usable)
     print("\n" + "=" * 66)
-    print(f"  Verifier evaluation  {args.model}  prompt {PROMPT_VERSION}")
+    print(f"  Verifier evaluation  {args.model}  prompt {BLIND_PROMPT_VERSION if getattr(args, 'mode', '') == 'blind' else PROMPT_VERSION}")
     print("=" * 66)
     print(f"  photographs attempted          {len(rows)}")
     print(f"  usable responses               {n}  ({len(rows) - n} failed or unparseable)")

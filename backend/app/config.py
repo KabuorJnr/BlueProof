@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     # means something. With 3 samples, a 0.6 threshold means "a majority
     # agreed"; set MIN_VERIFICATION_CONFIDENCE=0.9 to require unanimity.
     verifier_samples: int = 3
+    # corroborate: the model is told the declared species and asked if the
+    #   photo is consistent (prompt v3). Measured 2026-09-24: Llama 3.2 11B
+    #   agreed with all 20 wrong declarations it was given.
+    # blind: the model is NOT told the declaration; it picks from the nine
+    #   and code compares (prompt v4). Measure before switching.
+    verifier_mode: str = "corroborate"  # corroborate | blind
     verifier_sample_temperature: float = 0.7
     # Escalate a submission that arrives without a plot marker photograph.
     require_marker: bool = False

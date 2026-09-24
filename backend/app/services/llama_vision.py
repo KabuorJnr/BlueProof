@@ -38,7 +38,9 @@ from . import http
 
 # Bumped whenever the wording below changes. Recorded with every verdict, so a
 # figure measured against one prompt is never silently credited to another.
-PROMPT_VERSION = "v3-bounded"
+PROMPT_VERSION = "v3-bounded"          # corroborate mode
+BLIND_PROMPT_VERSION = "v4-blind"      # blind mode
+VERIFY_MAX_TOKENS = 900
 
 KENYAN_MANGROVE_SPECIES = [
     "Rhizophora mucronata",
@@ -81,6 +83,41 @@ SYSTEM_PROMPT = (
     '"confidence": 0.0, "reasoning": "..."}'
 )
 
+# Blind mode. The declared species is withheld: a model that is told the answer
+# agrees with it (docs/evaluations/2026-09-24-*), so it is asked to choose, and
+# the comparison with the monitor's declaration happens in code. Observation is
+# asked for FIRST, so the structured answers follow from a written description
+# rather than contradicting it ("a pile of cut logs" ... "cutting": false).
+BLIND_PROMPT = (
+    "You are assisting a human verifier for a community mangrove restoration "
+    "project on the Kenyan coast. You will see one photograph. Report only what "
+    "is visible. Do not guess, and do not assume the photo shows seedlings: it "
+    "may show mature trees, flowers, fruit, roots, animals, people or cut wood.\n\n"
+    "First write observation: two sentences describing exactly what is in the "
+    "photo. Then answer, consistently with your observation:\n"
+    "- legible: is it sharp, lit and framed well enough to judge the plants? true or false.\n"
+    "- subject: what the photo mainly shows: seedlings, trees, leaves, flowers, "
+    "fruit, roots, cut_wood, animal, other.\n"
+    "- health: condition of the plants visible: healthy, stressed, dead, or unclear.\n"
+    "- cutting: visible stumps, cut poles, cut logs or axe marks? true or false.\n"
+    "- pests: visible boring holes, frass or dieback? true or false.\n"
+    "- species: the mangrove species shown, chosen from EXACTLY this list, or "
+    "unclear if you cannot tell from visible features (leaves, flowers, fruit, "
+    f"propagules, roots): {', '.join(KENYAN_MANGROVE_SPECIES)}.\n"
+    "- species_evidence: the visible feature your species answer rests on, or none.\n"
+    "- seedlings: how many seedlings are clearly visible (integer, 0 if none).\n"
+    "- confidence: 0 to 1, how sure you are of the species.\n\n"
+    "Reply with ONLY a JSON object and no other text, in exactly this shape:\n"
+    '{"observation": "...", "legible": true, "subject": "trees", "health": "healthy", '
+    '"cutting": false, "pests": false, "species": "unclear", "species_evidence": "none", '
+    '"seedlings": 0, "confidence": 0.0}'
+)
+
+
+def _mode(mode: str | None) -> str:
+    return (mode or settings.verifier_mode or "corroborate").lower()
+
+
 # Instructions go in the USER turn, next to the image, not in a system message.
 # Llama 3.2 Vision (tested on NVIDIA's API, 2026-09-24) answered sensibly but
 # ignored a system message's output format entirely when an image was present.
@@ -101,8 +138,13 @@ class VerifierError(Exception):
     """The model could not be reached or did not answer in the agreed shape."""
 
 
-def build_messages(image_bytes: bytes, declared_species: str | None, mime: str = "image/jpeg") -> list[dict]:
+def build_messages(image_bytes: bytes, declared_species: str | None, mime: str = "image/jpeg",
+                   mode: str | None = None) -> list[dict]:
     b64 = base64.b64encode(image_bytes).decode()
+    if _mode(mode) == "blind":
+        # The declaration is deliberately not sent.
+        return _vision_turn(BLIND_PROMPT, "Describe, then assess this photograph. JSON only.",
+                            f"data:{mime};base64,{b64}")
     declared = declared_species or "not stated"
     return _vision_turn(
         SYSTEM_PROMPT,
@@ -144,9 +186,11 @@ def _canon_species(name) -> str | None:
     return None
 
 
-def parse_reply(content: str, declared_species: str | None, source: str) -> Verdict:
+def parse_reply(content: str, declared_species: str | None, source: str, mode: str | None = None) -> Verdict:
     """Turn a model reply into a Verdict, coercing anything off-menu to unclear."""
     data = _extract_json(content)
+    if _mode(mode) == "blind":
+        return _parse_blind(data, declared_species, source)
 
     health = str(data.get("health", "unclear")).strip().lower()
     if health not in HEALTH:
@@ -189,6 +233,44 @@ def parse_reply(content: str, declared_species: str | None, source: str) -> Verd
         # No cheerful default. If the model returned nothing here, the record
         # should say the model returned nothing here.
         reasoning=str(data.get("reasoning", "") or "No reasoning returned."),
+    )
+
+
+def _parse_blind(data: dict, declared_species: str | None, source: str) -> Verdict:
+    health = str(data.get("health", "unclear")).strip().lower()
+    if health not in HEALTH:
+        health = "unclear"
+    species = _canon_species(data.get("species")) or "unclear"
+    declared = _canon_species(declared_species)
+    # The comparison the corroborate prompt left to the model, done in code.
+    if species == "unclear" or declared is None:
+        consistent = "unclear"
+    else:
+        consistent = "yes" if species == declared else "no"
+    try:
+        confidence = min(1.0, max(0.0, float(data.get("confidence", 0.0))))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    try:
+        seedlings = max(0, int(data.get("seedlings", 0) or 0))
+    except (TypeError, ValueError):
+        seedlings = 0
+    observation = str(data.get("observation", "") or "").strip()
+    evidence = str(data.get("species_evidence", "") or "").strip()
+    reasoning = observation or "No observation returned."
+    if evidence and evidence.lower() != "none":
+        reasoning += f" Species evidence: {evidence}."
+    return Verdict(
+        source=source,
+        legible=_as_bool(data.get("legible", False)),
+        species_consistent=consistent,
+        detected_species=species,
+        seedlings_visible=seedlings,
+        health=health,
+        evidence_of_cutting=_as_bool(data.get("cutting", False)),
+        pest_damage=_as_bool(data.get("pests", False)),
+        confidence=confidence,
+        reasoning=reasoning,
     )
 
 
@@ -241,7 +323,8 @@ def source_label() -> str:
     if not is_live():
         return "mock"
     n = max(1, settings.verifier_samples)
-    return f"{settings.llama_model}@{PROMPT_VERSION}" + (f"x{n}" if n > 1 else "")
+    version = BLIND_PROMPT_VERSION if _mode(None) == "blind" else PROMPT_VERSION
+    return f"{settings.llama_model}@{version}" + (f"x{n}" if n > 1 else "")
 
 
 async def _chat(messages: list[dict], temperature: float, max_tokens: int = 400) -> str:
@@ -327,7 +410,11 @@ async def verify_plot(
     messages = build_messages(image_bytes, declared_species, mime)
     # One sample is deterministic; several need variation to mean anything.
     temperature = 0.0 if n == 1 else settings.verifier_sample_temperature
-    results = await asyncio.gather(*[_chat(messages, temperature) for _ in range(n)], return_exceptions=True)
+    # 900 tokens: blind mode describes before answering, and Llama 3.2 Vision
+    # often adds a Markdown walk-through first; 400 truncated the JSON on 24 of
+    # 60 photos in the first blind run.
+    results = await asyncio.gather(*[_chat(messages, temperature, VERIFY_MAX_TOKENS) for _ in range(n)],
+                                   return_exceptions=True)
 
     verdicts, errors = [], []
     for r in results:

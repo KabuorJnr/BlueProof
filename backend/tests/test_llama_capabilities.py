@@ -144,3 +144,30 @@ def test_comparison_failure_does_not_block(client, amina, live, monkeypatch):
     submit(client, amina, photo(64), client_ref="c-5")
     ev = submit(client, amina, photo(65), client_ref="c-6").json()["event"]
     assert ev["same_location"] == "unclear" and ev["status"] == "verified"
+
+
+# ---- blind mode (prompt v4) -------------------------------------------------------
+
+
+def test_blind_mode_never_sends_the_declaration(client, amina, live, monkeypatch):
+    monkeypatch.setattr(settings, "verifier_mode", "blind")
+    seen = live(verify={"observation": "Leaves and pencil roots.", "legible": True, "subject": "trees",
+                        "health": "healthy", "cutting": False, "pests": False,
+                        "species": "Avicennia marina", "species_evidence": "pencil roots",
+                        "seedlings": 0, "confidence": 0.8})
+    ev = submit(client, amina, photo(70), client_ref="b-1").json()["event"]
+    text = next(c["text"] for c in seen["verify"][0]["messages"][-1]["content"] if c["type"] == "text")
+    assert "Declared species" not in text
+    # Plot 1 is Rhizophora; the model chose Avicennia, so code records a dispute.
+    assert ev["species_consistent"] == "no" and ev["detected_species"] == "Avicennia marina"
+    assert ev["status"] == "needs_human"
+    assert ev["verification_source"].endswith("@v4-blindx3")
+
+
+def test_blind_mode_match_is_decided_in_code(client, amina, live, monkeypatch):
+    monkeypatch.setattr(settings, "verifier_mode", "blind")
+    live(verify={"observation": "Stilt roots, young plants.", "legible": True, "health": "healthy",
+                 "cutting": False, "pests": False, "species": "Rhizophora mucronata",
+                 "species_evidence": "stilt roots", "seedlings": 9, "confidence": 0.7})
+    ev = submit(client, amina, photo(71), client_ref="b-2").json()["event"]
+    assert ev["species_consistent"] == "yes" and ev["status"] == "verified"
