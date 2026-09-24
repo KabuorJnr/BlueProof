@@ -19,6 +19,11 @@ os.environ["DATABASE_URL"] = f"sqlite:///{(_TMP / 'test.db').as_posix()}"
 os.environ["PHOTO_DIR"] = str(_TMP / "photos")
 os.environ["DEMO_SEED"] = "true"
 os.environ["ENVIRONMENT"] = "dev"
+# Tests never reach a real service, whatever backend/.env holds: environment
+# variables take precedence over the file, and blanks mean mock mode.
+for _name in ("LLAMA_API_URL", "LLAMA_API_KEY", "COPERNICUS_CLIENT_ID", "COPERNICUS_CLIENT_SECRET"):
+    os.environ[_name] = ""
+os.environ["MPESA_MODE"] = "mock"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx  # noqa: E402

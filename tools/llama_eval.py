@@ -73,8 +73,10 @@ from app.services.llama_vision import (  # noqa: E402
 )
 from app.services.photos import side_by_side  # noqa: E402
 
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "meta-llama/llama-3.2-90b-vision-instruct"
+# Defaults come from backend/.env (LLAMA_API_URL, LLAMA_MODEL), so the eval
+# measures the configured deployment unless told otherwise.
+API_URL = settings.llama_api_url or "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_MODEL = settings.llama_model
 
 
 def norm(s) -> str:
@@ -166,9 +168,9 @@ def main() -> int:
                     help="verifier calls per photograph, aggregated as deployed (default: the deployed value)")
     args = ap.parse_args()
 
-    key = os.environ.get("OPENROUTER_API_KEY")
+    key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("LLAMA_API_KEY") or settings.llama_api_key
     if not key:
-        print("Set OPENROUTER_API_KEY in your environment. Do not hardcode it.", file=sys.stderr)
+        print("Set LLAMA_API_KEY in backend/.env (or OPENROUTER_API_KEY in your environment).", file=sys.stderr)
         return 2
 
     with args.labels.open(newline="", encoding="utf-8") as f:

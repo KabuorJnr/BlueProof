@@ -40,7 +40,7 @@ Start with 100 photographs. That is enough to find out whether the idea works.
 python tools/llama_eval.py \
   --photos ./photos \
   --labels ./labels.csv \
-  --model meta-llama/llama-3.2-90b-vision-instruct \
+  --model meta-llama/llama-4-scout \
   --limit 10          # do a cheap pilot run first, then drop this
 ```
 

@@ -6,6 +6,8 @@ to switch a service to live without touching the code.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The development secret. Refused at startup when ENVIRONMENT=production,
@@ -15,7 +17,9 @@ DEV_SECRET = "dev-only-not-a-secret"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # backend/.env wherever the server is started from; environment variables
+    # still take precedence over the file.
+    model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parents[1] / ".env", extra="ignore")
 
     app_name: str = "BlueProof API"
     environment: str = "dev"  # dev | production
@@ -61,7 +65,9 @@ class Settings(BaseSettings):
     # Leave the url blank to use the built in mock verifier and assistant.
     llama_api_url: str | None = None
     llama_api_key: str | None = None
-    llama_model: str = "meta-llama/llama-3.2-90b-vision-instruct"
+    # Llama 4 Scout: natively multimodal and the cheapest Llama vision model
+    # on OpenRouter. On Groq the id is meta-llama/llama-4-scout-17b-16e-instruct.
+    llama_model: str = "meta-llama/llama-4-scout"
     llama_timeout_s: float = 60.0
     # Ask the verifier this many times and use agreement as the confidence.
     # 3 costs 3x inference (cents per submission) and gives a confidence that
